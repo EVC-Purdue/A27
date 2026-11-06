@@ -1,6 +1,7 @@
 # A27
 2026-27 Autonomous Project Main Codebase
 
+Stack: https://drive.google.com/file/d/1IprModFcEGvDKVWouB32qoz0SIMfwzNb/view?usp=sharing
 ## Sponsors
 
 <a href="https://cloudrift.ai">
