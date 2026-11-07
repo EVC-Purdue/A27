@@ -11,7 +11,7 @@ Stack: https://drive.google.com/file/d/1IprModFcEGvDKVWouB32qoz0SIMfwzNb/view?us
   </picture>
 </a>
 
-
+:)
 
 
 Thank you to [CloudRift](https://cloudrift.ai) for generously powering our compute with fast, reliable GPUs that let us train and iterate on our autonomy stack.
