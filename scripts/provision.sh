@@ -4,7 +4,7 @@
 # shellcheck disable=SC1090,SC1091
 set -euo pipefail
 
-# ---------------------------------------------------------------- settings
+# settings
 
 ROS_DISTRO="jazzy"
 UBUNTU="noble" # Jazzy ships binaries for Ubuntu 24.04 only
@@ -26,7 +26,7 @@ ROS_PACKAGES=(
   git
 )
 
-# ---------------------------------------------------------------- helpers
+# helpers
 
 step() {
   echo
@@ -54,7 +54,7 @@ source_ros() {
   set -u
 }
 
-# ---------------------------------------------------------------- steps
+# steps
 
 check_os() {
   step "Check OS"
@@ -105,7 +105,7 @@ build_workspace() {
   mkdir -p data logs figures
 }
 
-# ---------------------------------------------------------------- roles
+# roles
 
 provision_dev() {
   check_os
