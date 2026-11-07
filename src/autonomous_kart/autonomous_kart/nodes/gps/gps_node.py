@@ -2,6 +2,7 @@
 
 https://github.com/EVC-Purdue/A27/issues/23
 """
+
 from rclpy.node import Node
 
 from autonomous_kart.common import run_node

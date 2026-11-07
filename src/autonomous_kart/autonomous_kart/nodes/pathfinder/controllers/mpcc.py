@@ -2,6 +2,7 @@
 
 https://github.com/EVC-Purdue/A27/issues/37
 """
+
 from autonomous_kart.nodes.pathfinder.controllers.base import (
     Controller,
     ControllerInputs,

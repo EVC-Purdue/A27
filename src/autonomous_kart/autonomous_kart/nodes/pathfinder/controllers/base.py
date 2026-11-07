@@ -2,9 +2,10 @@
 
 https://github.com/EVC-Purdue/A27/issues/13
 """
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, Tuple
+from typing import ClassVar
 
 
 @dataclass(frozen=True)
@@ -38,8 +39,8 @@ class ControllerInputs:
     wheel_speed: float  # m/s
     steering_angle: float  # rad
     steering_motor_current: float  # A
-    line: Tuple[LinePoint, ...] = ()
-    tracks: Tuple[Track, ...] = ()
+    line: tuple[LinePoint, ...] = ()
+    tracks: tuple[Track, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -57,8 +58,7 @@ class Controller(ABC):
         self.params = params
 
     @abstractmethod
-    def step(self, inputs: ControllerInputs) -> ControllerOutput:
-        ...
+    def step(self, inputs: ControllerInputs) -> ControllerOutput: ...
 
-    def reset(self) -> None:
+    def reset(self) -> None:  # noqa: B027
         pass

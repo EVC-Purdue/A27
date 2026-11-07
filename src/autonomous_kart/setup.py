@@ -1,5 +1,6 @@
 from glob import glob
 from pathlib import Path
+
 from setuptools import find_packages, setup
 
 package_name = "autonomous_kart"
@@ -24,8 +25,6 @@ setup(
     description="A27 kart nodes, params and launch files.",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": [
-            f"{n}_node = autonomous_kart.nodes.{n}.{n}_node:main" for n in NODES
-        ],
+        "console_scripts": [f"{n}_node = autonomous_kart.nodes.{n}.{n}_node:main" for n in NODES],
     },
 )

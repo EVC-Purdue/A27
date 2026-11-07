@@ -2,6 +2,7 @@
 
 https://github.com/EVC-Purdue/A27/issues/30
 """
+
 from rclpy.node import Node
 from sensor_msgs.msg import Image, LaserScan
 
@@ -16,9 +17,7 @@ class PerceptionNode(Node):
 
         self.create_subscription(Image, "camera/image_raw", self.on_msg, IMAGE_QOS)
         self.create_subscription(LaserScan, "scan", self.on_msg, 10)
-        self.measurements_pub = self.create_publisher(
-            ObjectMeasurementArray, "perception/measurements", 10
-        )
+        self.measurements_pub = self.create_publisher(ObjectMeasurementArray, "perception/measurements", 10)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def on_msg(self, msg):

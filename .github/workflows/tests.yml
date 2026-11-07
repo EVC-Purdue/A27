@@ -14,6 +14,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruff
+        uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.17.4"
+
+      - name: Ruff format
+        uses: astral-sh/ruff-action@v4
+        with:
+          version: "0.17.4"
+          args: "format --check"
+
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh
+
   colcon-test:
     runs-on: ubuntu-24.04
     container:

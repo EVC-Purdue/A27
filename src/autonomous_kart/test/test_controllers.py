@@ -4,6 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/13
 https://github.com/EVC-Purdue/A27/issues/36
 https://github.com/EVC-Purdue/A27/issues/37
 """
+
 import math
 
 import pytest
@@ -20,8 +21,16 @@ from autonomous_kart.nodes.pathfinder.controllers.base import (
 
 def straight_line_inputs(**overrides):
     fields = dict(
-        t=0.0, x=0.0, y=0.0, yaw=0.0, vx=5.0, vy=0.0, yaw_rate=0.0,
-        wheel_speed=5.0, steering_angle=0.0, steering_motor_current=0.0,
+        t=0.0,
+        x=0.0,
+        y=0.0,
+        yaw=0.0,
+        vx=5.0,
+        vy=0.0,
+        yaw_rate=0.0,
+        wheel_speed=5.0,
+        steering_angle=0.0,
+        steering_motor_current=0.0,
         line=tuple(LinePoint(float(i), 0.0, 0.0, 8.0) for i in range(50)),
         tracks=(),
     )

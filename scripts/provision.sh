@@ -1,91 +1,131 @@
 #!/usr/bin/env bash
 # https://github.com/EVC-Purdue/A27/issues/15
-# Provision a host for one role: jetson, rubik, unoq or dev. Safe to rerun.
+# Set up a host for one role (dev, jetson, rubik or unoq); safe to rerun.
+# shellcheck disable=SC1090,SC1091
 set -euo pipefail
 
-usage() { echo "usage: $0 {jetson|rubik|unoq|dev}" >&2; exit 2; }
-[ $# -eq 1 ] || usage
-ROLE="$1"
+# ---------------------------------------------------------------- settings
 
-ROS_DISTRO="${ROS_DISTRO:-jazzy}"
-WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROS_DISTRO="jazzy"
+UBUNTU="noble" # Jazzy ships binaries for Ubuntu 24.04 only
+WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-SUDO=""
-[ "$(id -u)" -eq 0 ] || SUDO="sudo"
+ROS_KEY_URL="https://raw.githubusercontent.com/ros/rosdistro/master/ros.key"
+ROS_KEYRING="/usr/share/keyrings/ros-archive-keyring.gpg"
+ROS_APT_LIST="/etc/apt/sources.list.d/ros2.list"
 
-preflight() {
-  say "Preflight ($ROLE)"
-  . /etc/os-release
-  echo "    os        $PRETTY_NAME ($VERSION_CODENAME, $(dpkg --print-architecture))"
-  echo "    workspace $WS"
-  # Jazzy binaries target Ubuntu 24.04 only
-  if [ "$VERSION_CODENAME" != noble ]; then
-    echo "    ROS 2 $ROS_DISTRO needs Ubuntu 24.04 (noble); this is $VERSION_CODENAME. Stop here." >&2
-    exit 1
+ROS_PACKAGES=(
+  "ros-$ROS_DISTRO-ros-base"
+  "ros-$ROS_DISTRO-rmw-cyclonedds-cpp"
+  "ros-$ROS_DISTRO-rosbag2-storage-mcap"
+  python3-colcon-common-extensions
+  python3-rosdep
+  python3-pip
+  python3-pytest
+  build-essential
+  git
+)
+
+# ---------------------------------------------------------------- helpers
+
+step() {
+  echo
+  echo "==> $*"
+}
+
+fail() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+# Runs a command as root, through sudo unless we already are root (as in CI)
+as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo "$@"
   fi
 }
 
-ros_apt() {
-  say "ROS 2 apt repository"
-  if grep -Rqs packages.ros.org/ros2 /etc/apt/sources.list /etc/apt/sources.list.d/; then
-    echo "    already configured"
+# ROS's setup.bash reads unset variables, so -u is off while it loads
+source_ros() {
+  set +u
+  . "/opt/ros/$ROS_DISTRO/setup.bash"
+  set -u
+}
+
+# ---------------------------------------------------------------- steps
+
+check_os() {
+  step "Check OS"
+  [ -f /etc/os-release ] || fail "ROS 2 $ROS_DISTRO needs Ubuntu $UBUNTU, this is not Linux"
+  . /etc/os-release
+  echo "$PRETTY_NAME, workspace $WORKSPACE"
+  [ "$VERSION_CODENAME" = "$UBUNTU" ] || fail "ROS 2 $ROS_DISTRO needs Ubuntu $UBUNTU, this is $VERSION_CODENAME"
+}
+
+add_ros_apt_source() {
+  step "Add the ROS 2 apt source"
+  if grep -Rqs "packages.ros.org/ros2" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+    echo "already added"
     return
   fi
-  $SUDO apt-get update
-  $SUDO apt-get install -y --no-install-recommends software-properties-common curl gnupg ca-certificates
-  $SUDO add-apt-repository -y universe
-  $SUDO curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-    -o /usr/share/keyrings/ros-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-http://packages.ros.org/ros2/ubuntu $VERSION_CODENAME main" \
-    | $SUDO tee /etc/apt/sources.list.d/ros2.list >/dev/null
+  as_root apt-get update
+  as_root apt-get install -y --no-install-recommends software-properties-common curl gnupg ca-certificates
+  as_root add-apt-repository -y universe
+  as_root curl -fsSL "$ROS_KEY_URL" -o "$ROS_KEYRING"
+
+  local arch
+  arch="$(dpkg --print-architecture)"
+  echo "deb [arch=$arch signed-by=$ROS_KEYRING] http://packages.ros.org/ros2/ubuntu $UBUNTU main" \
+    | as_root tee "$ROS_APT_LIST" > /dev/null
 }
 
-ros_packages() {
-  say "Packages"
-  $SUDO apt-get update
-  $SUDO apt-get install -y --no-install-recommends \
-    "ros-${ROS_DISTRO}-ros-base" \
-    "ros-${ROS_DISTRO}-rmw-cyclonedds-cpp" \
-    "ros-${ROS_DISTRO}-rosbag2-storage-mcap" \
-    python3-colcon-common-extensions python3-rosdep python3-pip python3-pytest \
-    build-essential git
+install_ros() {
+  step "Install ROS 2 $ROS_DISTRO"
+  as_root apt-get update
+  as_root apt-get install -y --no-install-recommends "${ROS_PACKAGES[@]}"
 }
 
-rosdep_install() {
-  say "rosdep"
-  [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || $SUDO rosdep init
+install_workspace_deps() {
+  step "Install workspace dependencies"
+  if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+    as_root rosdep init
+  fi
   rosdep update
-  # shellcheck disable=SC1090
-  set +u; . "/opt/ros/${ROS_DISTRO}/setup.bash"; set -u
-  rosdep install --from-paths "$WS/src" --ignore-src -y --rosdistro "$ROS_DISTRO"
+  source_ros
+  rosdep install --from-paths "$WORKSPACE/src" --ignore-src -y --rosdistro "$ROS_DISTRO"
 }
 
-build() {
-  say "Build"
-  set +u; . "/opt/ros/${ROS_DISTRO}/setup.bash"; set -u
-  ( cd "$WS" && colcon build --symlink-install )
-  mkdir -p "$WS/data" "$WS/logs" "$WS/figures"
+build_workspace() {
+  step "Build the workspace"
+  source_ros
+  cd "$WORKSPACE"
+  colcon build --symlink-install
+  mkdir -p data logs figures
 }
 
-case "$ROLE" in
-  dev)
-    preflight
-    ros_apt
-    ros_packages
-    rosdep_install
-    build
-    say "Done"
-    echo "    source $WS/install/setup.bash"
-    echo "    ros2 launch autonomous_kart bringup_sim.launch.py"
-    ;;
-  jetson|rubik|unoq)
-    # TODO(#15): per-role udev rules, systemd units and journald config
-    echo "role $ROLE is not provisioned yet (#15)" >&2
-    exit 1
-    ;;
-  *)
-    usage
-    ;;
-esac
+# ---------------------------------------------------------------- roles
+
+provision_dev() {
+  check_os
+  add_ros_apt_source
+  install_ros
+  install_workspace_deps
+  build_workspace
+
+  step "Done. Next:"
+  echo "source $WORKSPACE/install/setup.bash"
+  echo "ros2 launch autonomous_kart bringup_sim.launch.py"
+}
+
+main() {
+  [ $# -eq 1 ] || fail "usage: $0 {dev|jetson|rubik|unoq}"
+  case "$1" in
+    dev) provision_dev ;;
+    jetson | rubik | unoq) fail "role $1 is not supported yet (#15)" ;;
+    *) fail "unknown role $1, expected dev, jetson, rubik or unoq" ;;
+  esac
+}
+
+main "$@"

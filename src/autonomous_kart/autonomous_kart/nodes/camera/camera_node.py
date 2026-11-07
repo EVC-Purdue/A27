@@ -2,6 +2,7 @@
 
 https://github.com/EVC-Purdue/A27/issues/22
 """
+
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 

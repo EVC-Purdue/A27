@@ -4,6 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/10
 https://github.com/EVC-Purdue/A27/issues/13
 https://github.com/EVC-Purdue/A27/issues/33
 """
+
 import math
 
 from nav_msgs.msg import Odometry
@@ -38,8 +39,13 @@ def to_inputs(t, odom, telemetry, tracks, line):
         line=tuple(base.LinePoint(p.x, p.y, p.curvature, p.target_speed) for p in line.points),
         tracks=tuple(
             base.Track(
-                o.id, o.object_class, o.footprint_size,
-                o.position.x, o.position.y, o.velocity.x, o.velocity.y,
+                o.id,
+                o.object_class,
+                o.footprint_size,
+                o.position.x,
+                o.position.y,
+                o.velocity.x,
+                o.velocity.y,
             )
             for o in tracks.objects
         ),
