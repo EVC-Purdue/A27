@@ -4,8 +4,6 @@
 Stack: https://drive.google.com/file/d/1IprModFcEGvDKVWouB32qoz0SIMfwzNb/view?usp=sharing
 ## Sponsors
 
-Hello
-
 <a href="https://cloudrift.ai">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/sponsors/cloudrift-dark.png">
