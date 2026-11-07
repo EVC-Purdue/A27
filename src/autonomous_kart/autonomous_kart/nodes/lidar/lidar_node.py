@@ -8,7 +8,7 @@ import math
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 
-from autonomous_kart.common import run_node
+from autonomous_kart.common import QOS_LOW, run_node
 
 
 class LidarNode(Node):
@@ -18,7 +18,7 @@ class LidarNode(Node):
         self.declare_parameter("num_beams", 3200)
         self.num_beams = self.get_parameter("num_beams").value
 
-        self.scan_pub = self.create_publisher(LaserScan, "scan", 10)
+        self.scan_pub = self.create_publisher(LaserScan, "scan", QOS_LOW)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def tick(self):

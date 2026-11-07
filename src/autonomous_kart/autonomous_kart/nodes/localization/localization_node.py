@@ -10,7 +10,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from tf2_ros import TransformBroadcaster
 
-from autonomous_kart.common import run_node
+from autonomous_kart.common import QOS_HIGH, QOS_LOW, run_node
 from kart_interfaces.msg import (
     GpsFix,
     KartTelemetry,
@@ -24,14 +24,14 @@ class LocalizationNode(Node):
         super().__init__("localization_node")
         self.declare_parameter("publish_hz", 50.0)
 
-        self.create_subscription(GpsFix, "gps", self.on_msg, 10)
-        self.create_subscription(Imu, "imu/front", self.on_msg, 10)
-        self.create_subscription(Imu, "imu/back", self.on_msg, 10)
-        self.create_subscription(KartTelemetry, "e_comms/telemetry", self.on_msg, 10)
-        self.create_subscription(PoseWithCovarianceStamped, "slam/pose", self.on_msg, 10)
-        self.create_subscription(ObjectMeasurementArray, "perception/measurements", self.on_msg, 10)
-        self.odom_pub = self.create_publisher(Odometry, "odom", 10)
-        self.tracks_pub = self.create_publisher(TrackedObjectArray, "localization/tracks", 10)
+        self.create_subscription(GpsFix, "gps", self.on_msg, QOS_LOW)
+        self.create_subscription(Imu, "imu/front", self.on_msg, QOS_HIGH)
+        self.create_subscription(Imu, "imu/back", self.on_msg, QOS_HIGH)
+        self.create_subscription(KartTelemetry, "e_comms/telemetry", self.on_msg, QOS_HIGH)
+        self.create_subscription(PoseWithCovarianceStamped, "slam/pose", self.on_msg, QOS_LOW)
+        self.create_subscription(ObjectMeasurementArray, "perception/measurements", self.on_msg, QOS_LOW)
+        self.odom_pub = self.create_publisher(Odometry, "odom", QOS_HIGH)
+        self.tracks_pub = self.create_publisher(TrackedObjectArray, "localization/tracks", QOS_HIGH)
         self.tf_broadcaster = TransformBroadcaster(self)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 

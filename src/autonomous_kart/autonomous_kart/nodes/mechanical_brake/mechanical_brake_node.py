@@ -6,7 +6,7 @@ https://github.com/EVC-Purdue/A27/issues/38
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
-from autonomous_kart.common import STATE_QOS, run_node
+from autonomous_kart.common import QOS_HIGH, QOS_LOW, QOS_STATE, run_node
 
 
 class MechanicalBrakeNode(Node):
@@ -16,9 +16,9 @@ class MechanicalBrakeNode(Node):
         self.engaged = False
         self.system_state = None
 
-        self.create_subscription(Bool, "mechanical_brake/command", self.on_cmd, 10)
-        self.create_subscription(String, "system_state", self.on_state, STATE_QOS)
-        self.state_pub = self.create_publisher(Bool, "mechanical_brake/state", 10)
+        self.create_subscription(Bool, "mechanical_brake/command", self.on_cmd, QOS_HIGH)
+        self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
+        self.state_pub = self.create_publisher(Bool, "mechanical_brake/state", QOS_LOW)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def on_cmd(self, msg):

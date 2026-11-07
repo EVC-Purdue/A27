@@ -5,7 +5,7 @@ https://github.com/EVC-Purdue/A27/issues/23
 
 from rclpy.node import Node
 
-from autonomous_kart.common import run_node
+from autonomous_kart.common import QOS_LOW, run_node
 from kart_interfaces.msg import GpsFix
 
 
@@ -14,7 +14,7 @@ class GpsNode(Node):
         super().__init__("gps_node")
         self.declare_parameter("publish_hz", 20.0)
 
-        self.gps_pub = self.create_publisher(GpsFix, "gps", 10)
+        self.gps_pub = self.create_publisher(GpsFix, "gps", QOS_LOW)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def tick(self):

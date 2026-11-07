@@ -7,7 +7,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
 
-from autonomous_kart.common import run_node
+from autonomous_kart.common import QOS_LOW, run_node
 
 
 class SlamNode(Node):
@@ -15,8 +15,8 @@ class SlamNode(Node):
         super().__init__("slam_node")
         self.declare_parameter("publish_hz", 10.0)
 
-        self.create_subscription(LaserScan, "scan", self.on_msg, 10)
-        self.pose_pub = self.create_publisher(PoseWithCovarianceStamped, "slam/pose", 10)
+        self.create_subscription(LaserScan, "scan", self.on_msg, QOS_LOW)
+        self.pose_pub = self.create_publisher(PoseWithCovarianceStamped, "slam/pose", QOS_LOW)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def on_msg(self, msg):

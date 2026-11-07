@@ -19,7 +19,7 @@ from sensor_msgs.msg import Image, Imu, LaserScan  # noqa: E402
 from std_msgs.msg import Bool, String  # noqa: E402
 from tf2_msgs.msg import TFMessage  # noqa: E402
 
-from autonomous_kart.common import IMAGE_QOS, STATE_QOS  # noqa: E402
+from autonomous_kart.common import QOS_HIGH, QOS_IMAGE, QOS_LOW, QOS_STATE  # noqa: E402
 from kart_interfaces.msg import (  # noqa: E402
     DriveCommand,
     GpsFix,
@@ -30,23 +30,23 @@ from kart_interfaces.msg import (  # noqa: E402
 )
 
 TOPICS = {
-    "system_state": (String, STATE_QOS),
-    "camera/image_raw": (Image, IMAGE_QOS),
-    "gps": (GpsFix, 10),
-    "imu/front": (Imu, 10),
-    "imu/back": (Imu, 10),
-    "scan": (LaserScan, 10),
-    "e_comms/telemetry": (KartTelemetry, 10),
-    "mechanical_brake/command": (Bool, 10),
-    "mechanical_brake/state": (Bool, 10),
-    "odom": (Odometry, 10),
-    "tf": (TFMessage, 10),
-    "localization/tracks": (TrackedObjectArray, 10),
-    "perception/measurements": (ObjectMeasurementArray, 10),
-    "slam/pose": (PoseWithCovarianceStamped, 10),
-    "gs3d/pose": (PoseWithCovarianceStamped, 10),
-    "pathfinder/line": (Line, 10),
-    "cmd_drive": (DriveCommand, 10),
+    "system_state": (String, QOS_STATE),
+    "camera/image_raw": (Image, QOS_IMAGE),
+    "gps": (GpsFix, QOS_LOW),
+    "imu/front": (Imu, QOS_HIGH),
+    "imu/back": (Imu, QOS_HIGH),
+    "scan": (LaserScan, QOS_LOW),
+    "e_comms/telemetry": (KartTelemetry, QOS_HIGH),
+    "mechanical_brake/command": (Bool, QOS_HIGH),
+    "mechanical_brake/state": (Bool, QOS_LOW),
+    "odom": (Odometry, QOS_HIGH),
+    "tf": (TFMessage, QOS_HIGH),
+    "localization/tracks": (TrackedObjectArray, QOS_HIGH),
+    "perception/measurements": (ObjectMeasurementArray, QOS_LOW),
+    "slam/pose": (PoseWithCovarianceStamped, QOS_LOW),
+    "gs3d/pose": (PoseWithCovarianceStamped, QOS_LOW),
+    "pathfinder/line": (Line, QOS_HIGH),
+    "cmd_drive": (DriveCommand, QOS_HIGH),
 }
 
 

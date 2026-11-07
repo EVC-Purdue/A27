@@ -6,7 +6,7 @@ https://github.com/EVC-Purdue/A27/issues/22
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-from autonomous_kart.common import IMAGE_QOS, run_node
+from autonomous_kart.common import QOS_IMAGE, run_node
 
 
 class CameraNode(Node):
@@ -18,7 +18,7 @@ class CameraNode(Node):
         self.width = self.get_parameter("width").value
         self.height = self.get_parameter("height").value
 
-        self.image_pub = self.create_publisher(Image, "camera/image_raw", IMAGE_QOS)
+        self.image_pub = self.create_publisher(Image, "camera/image_raw", QOS_IMAGE)
         self.create_timer(1.0 / self.get_parameter("frame_rate").value, self.tick)
 
     def tick(self):

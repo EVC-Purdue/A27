@@ -11,7 +11,7 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
 
-from autonomous_kart.common import STATE_QOS, run_node
+from autonomous_kart.common import QOS_HIGH, QOS_STATE, run_node
 from autonomous_kart.nodes.pathfinder.controllers import base, make_controller
 from kart_interfaces.msg import (
     DriveCommand,
@@ -66,13 +66,13 @@ class PathfinderNode(Node):
         self.telemetry = KartTelemetry()
         self.tracks = TrackedObjectArray()
 
-        self.create_subscription(Odometry, "odom", self.on_odom, 10)
-        self.create_subscription(TrackedObjectArray, "localization/tracks", self.on_tracks, 10)
-        self.create_subscription(KartTelemetry, "e_comms/telemetry", self.on_telemetry, 10)
-        self.create_subscription(String, "system_state", self.on_state, STATE_QOS)
-        self.line_pub = self.create_publisher(Line, "pathfinder/line", 10)
-        self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", 10)
-        self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", 10)
+        self.create_subscription(Odometry, "odom", self.on_odom, QOS_HIGH)
+        self.create_subscription(TrackedObjectArray, "localization/tracks", self.on_tracks, QOS_HIGH)
+        self.create_subscription(KartTelemetry, "e_comms/telemetry", self.on_telemetry, QOS_HIGH)
+        self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
+        self.line_pub = self.create_publisher(Line, "pathfinder/line", QOS_HIGH)
+        self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", QOS_HIGH)
+        self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", QOS_HIGH)
         self.create_timer(1.0 / system_frequency, self.tick)
 
     def param(self, name, default):

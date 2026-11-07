@@ -8,7 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
 
-from autonomous_kart.common import STATE_QOS, run_node
+from autonomous_kart.common import QOS_HIGH, QOS_STATE, run_node
 from kart_interfaces.msg import DriveCommand, KartTelemetry
 
 
@@ -19,10 +19,10 @@ class ECommsNode(Node):
         self.last_cmd = DriveCommand()
         self.system_state = None
 
-        self.create_subscription(DriveCommand, "cmd_drive", self.on_cmd, 10)
-        self.create_subscription(String, "system_state", self.on_state, STATE_QOS)
-        self.telemetry_pub = self.create_publisher(KartTelemetry, "e_comms/telemetry", 10)
-        self.imu_pub = self.create_publisher(Imu, "imu/back", 10)
+        self.create_subscription(DriveCommand, "cmd_drive", self.on_cmd, QOS_HIGH)
+        self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
+        self.telemetry_pub = self.create_publisher(KartTelemetry, "e_comms/telemetry", QOS_HIGH)
+        self.imu_pub = self.create_publisher(Imu, "imu/back", QOS_HIGH)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def on_cmd(self, msg):

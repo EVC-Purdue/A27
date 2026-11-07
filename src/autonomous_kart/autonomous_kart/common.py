@@ -14,8 +14,24 @@ from rclpy.qos import (
 
 SYSTEM_STATES = ("IDLE", "MANUAL", "AUTONOMOUS", "STOPPED")
 
+# Default for slow topics (20 Hz and below): every message should arrive
+QOS_LOW = QoSProfile(
+    depth=10,
+    history=HistoryPolicy.KEEP_LAST,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
+# Default for fast topics (50 Hz and up): dropped messages are replaced
+QOS_HIGH = QoSProfile(
+    depth=5,
+    history=HistoryPolicy.KEEP_LAST,
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
 # Latched so a node started late still gets the current state
-STATE_QOS = QoSProfile(
+QOS_STATE = QoSProfile(
     depth=1,
     history=HistoryPolicy.KEEP_LAST,
     reliability=ReliabilityPolicy.RELIABLE,
@@ -23,7 +39,7 @@ STATE_QOS = QoSProfile(
 )
 
 # Slow image consumers drop stale frames
-IMAGE_QOS = QoSProfile(
+QOS_IMAGE = QoSProfile(
     depth=1,
     history=HistoryPolicy.KEEP_LAST,
     reliability=ReliabilityPolicy.BEST_EFFORT,

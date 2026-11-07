@@ -6,7 +6,7 @@ https://github.com/EVC-Purdue/A27/issues/24
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
 
-from autonomous_kart.common import run_node
+from autonomous_kart.common import QOS_HIGH, run_node
 
 
 class ImuNode(Node):
@@ -14,7 +14,7 @@ class ImuNode(Node):
         super().__init__("imu_node")
         self.declare_parameter("publish_hz", 100.0)
 
-        self.imu_pub = self.create_publisher(Imu, "imu/front", 10)
+        self.imu_pub = self.create_publisher(Imu, "imu/front", QOS_HIGH)
         self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
 
     def tick(self):
