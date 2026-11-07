@@ -21,6 +21,8 @@ from kart_interfaces.msg import (
     TrackedObjectArray,
 )
 
+NO_ODOM_WARN_PERIOD_S = 1.0
+
 
 def to_inputs(time_s, odom, telemetry, tracks, line):
     q = odom.pose.pose.orientation
@@ -99,9 +101,15 @@ class PathfinderNode(Node):
 
         # Only AUTONOMOUS runs the controller; every other state commands no motion
         out = base.ControllerOutput()
-        if self.system_state == "AUTONOMOUS" and self.odom is not None:
-            inputs = to_inputs(now.nanoseconds * 1e-9, self.odom, self.telemetry, self.tracks, line)
-            out = self.controller.step(inputs)
+        if self.system_state == "AUTONOMOUS":
+            if self.odom is None:
+                self.get_logger().warn(
+                    "AUTONOMOUS but no odom received",
+                    throttle_duration_sec=NO_ODOM_WARN_PERIOD_S,
+                )
+            else:
+                inputs = to_inputs(now.nanoseconds * 1e-9, self.odom, self.telemetry, self.tracks, line)
+                out = self.controller.step(inputs)
 
         cmd = DriveCommand()
         cmd.header.stamp = line.header.stamp
