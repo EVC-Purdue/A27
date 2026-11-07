@@ -13,14 +13,14 @@ from autonomous_kart.common import QOS_IMAGE, run_node
 class CameraNode(Node):
     def __init__(self):
         super().__init__("camera_node")
-        self.declare_parameter("frame_rate", Parameter.Type.DOUBLE)
+        self.declare_parameter("frame_rate_hz", Parameter.Type.DOUBLE)
         self.declare_parameter("width", Parameter.Type.INTEGER)
         self.declare_parameter("height", Parameter.Type.INTEGER)
         self.width = self.get_parameter("width").value
         self.height = self.get_parameter("height").value
 
         self.image_pub = self.create_publisher(Image, "camera/image_raw", QOS_IMAGE)
-        self.create_timer(1.0 / self.get_parameter("frame_rate").value, self.tick)
+        self.create_timer(1.0 / self.get_parameter("frame_rate_hz").value, self.tick)
 
     def tick(self):
         msg = Image()

@@ -21,16 +21,16 @@ from autonomous_kart.nodes.pathfinder.controllers.base import (
 
 def straight_line_inputs(**overrides):
     fields = dict(
-        time=0.0,
-        x=0.0,
-        y=0.0,
-        yaw=0.0,
-        vx=5.0,
-        vy=0.0,
-        yaw_rate=0.0,
-        wheel_speed=5.0,
-        steering_angle=0.0,
-        steering_motor_current=0.0,
+        time_s=0.0,
+        x_m=0.0,
+        y_m=0.0,
+        yaw_rad=0.0,
+        vx_mps=5.0,
+        vy_mps=0.0,
+        yaw_rate_radps=0.0,
+        wheel_speed_mps=5.0,
+        steering_angle_rad=0.0,
+        steering_motor_current_a=0.0,
         line=tuple(LinePoint(float(i), 0.0, 0.0, 8.0) for i in range(50)),
         tracks=(),
     )
@@ -52,7 +52,7 @@ def test_unknown_controller_raises():
     "inputs",
     [
         straight_line_inputs(),
-        straight_line_inputs(vx=0.0, wheel_speed=0.0),
+        straight_line_inputs(vx_mps=0.0, wheel_speed_mps=0.0),
         straight_line_inputs(tracks=(Track(1, 1, 1.5, 10.0, 0.0, 3.0, 0.0),)),
     ],
     ids=["straight", "standstill", "kart_ahead"],
@@ -62,7 +62,7 @@ def test_step_returns_valid_output(name, inputs):
     assert isinstance(controller, Controller)
     out = controller.step(inputs)
     assert isinstance(out, ControllerOutput)
-    assert math.isfinite(out.speed_setpoint) and math.isfinite(out.steering)
+    assert math.isfinite(out.speed_setpoint_mps) and math.isfinite(out.steering_rad)
     assert 0.0 <= out.electrical_brake <= 1.0
     assert isinstance(out.mechanical_brake, bool)
 

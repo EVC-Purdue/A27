@@ -22,20 +22,20 @@ from kart_interfaces.msg import (
 )
 
 
-def to_inputs(time, odom, telemetry, tracks, line):
+def to_inputs(time_s, odom, telemetry, tracks, line):
     q = odom.pose.pose.orientation
-    yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+    yaw_rad = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
     return base.ControllerInputs(
-        time=time,
-        x=odom.pose.pose.position.x,
-        y=odom.pose.pose.position.y,
-        yaw=yaw,
-        vx=odom.twist.twist.linear.x,
-        vy=odom.twist.twist.linear.y,
-        yaw_rate=odom.twist.twist.angular.z,
-        wheel_speed=telemetry.wheel_speed,
-        steering_angle=telemetry.steering_angle,
-        steering_motor_current=telemetry.steering_motor_current,
+        time_s=time_s,
+        x_m=odom.pose.pose.position.x,
+        y_m=odom.pose.pose.position.y,
+        yaw_rad=yaw_rad,
+        vx_mps=odom.twist.twist.linear.x,
+        vy_mps=odom.twist.twist.linear.y,
+        yaw_rate_radps=odom.twist.twist.angular.z,
+        wheel_speed_mps=telemetry.wheel_speed,
+        steering_angle_rad=telemetry.steering_angle,
+        steering_motor_current_a=telemetry.steering_motor_current,
         line=tuple(base.LinePoint(p.x, p.y, p.curvature, p.target_speed) for p in line.points),
         tracks=tuple(
             base.Track(
@@ -55,7 +55,7 @@ def to_inputs(time, odom, telemetry, tracks, line):
 class PathfinderNode(Node):
     def __init__(self):
         super().__init__("pathfinder_node", automatically_declare_parameters_from_overrides=True)
-        system_frequency = self.get_parameter("system_frequency").value
+        system_frequency_hz = self.get_parameter("system_frequency_hz").value
         name = self.get_parameter("controller").value
         params = {k: p.value for k, p in self.get_parameters_by_prefix(name).items()}
         self.controller = make_controller(name, params)
@@ -73,7 +73,7 @@ class PathfinderNode(Node):
         self.line_pub = self.create_publisher(Line, "pathfinder/line", QOS_HIGH)
         self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", QOS_HIGH)
         self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", QOS_HIGH)
-        self.create_timer(1.0 / system_frequency, self.tick)
+        self.create_timer(1.0 / system_frequency_hz, self.tick)
 
     def on_odom(self, msg):
         self.odom = msg
@@ -105,8 +105,8 @@ class PathfinderNode(Node):
 
         cmd = DriveCommand()
         cmd.header.stamp = line.header.stamp
-        cmd.speed_setpoint = out.speed_setpoint
-        cmd.steering = out.steering
+        cmd.speed_setpoint = out.speed_setpoint_mps
+        cmd.steering = out.steering_rad
         cmd.electrical_brake = out.electrical_brake
         self.cmd_pub.publish(cmd)
         self.brake_pub.publish(Bool(data=out.mechanical_brake))

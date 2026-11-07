@@ -1,5 +1,5 @@
 camera_node:
   ros__parameters:
-    frame_rate: 30.0 # Hz
+    frame_rate_hz: 30.0
     width: 640
     height: 480
