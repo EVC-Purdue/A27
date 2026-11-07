@@ -1,0 +1,3 @@
+mechanical_brake_node:
+  ros__parameters:
+    publish_hz: 20.0

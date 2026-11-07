@@ -1,0 +1,5 @@
+camera_node:
+  ros__parameters:
+    frame_rate: 30.0 # Hz
+    width: 640
+    height: 480

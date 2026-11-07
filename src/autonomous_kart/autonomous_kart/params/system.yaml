@@ -1,0 +1,5 @@
+/**:
+  ros__parameters:
+    simulation_mode: false
+    system_state: "IDLE" # "STOPPED", "IDLE", "MANUAL", "AUTONOMOUS"
+    system_frequency: 50.0 # Hz, control loop
