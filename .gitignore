@@ -218,3 +218,10 @@ __marimo__/
 .streamlit/secrets.toml
 CLAUDE.md
 docs/superpowers/
+
+# ROS workspace and run output
+install/
+log/
+/data/
+/logs/
+/figures/

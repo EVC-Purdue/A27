@@ -1,0 +1,57 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruff
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: "0.17.4"
+
+      - name: Ruff format
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          version: "0.17.4"
+          args: "format --check"
+
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh
+
+  colcon-test:
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy
+    env:
+      ROS_DOMAIN_ID: "77"
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision dev and build
+        shell: bash
+        run: scripts/provision.sh dev
+
+      - name: Test
+        shell: bash
+        run: |
+          set -eo pipefail
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          colcon test --event-handlers console_direct+ --pytest-args -rfEs
+          colcon test-result --verbose

@@ -1,0 +1,9 @@
+line-length = 120
+target-version = "py312"
+extend-exclude = ["build", "install", "log"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[lint.isort]
+known-first-party = ["autonomous_kart", "kart_interfaces"]

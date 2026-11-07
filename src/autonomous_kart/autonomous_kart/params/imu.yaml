@@ -1,0 +1,3 @@
+imu_node:
+  ros__parameters:
+    publish_rate_hz: 100.0
