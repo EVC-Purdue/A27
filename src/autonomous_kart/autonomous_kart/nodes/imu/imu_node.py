@@ -4,6 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/24
 """
 
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu
 
 from autonomous_kart.common import QOS_HIGH, run_node
@@ -12,10 +13,10 @@ from autonomous_kart.common import QOS_HIGH, run_node
 class ImuNode(Node):
     def __init__(self):
         super().__init__("imu_node")
-        self.declare_parameter("publish_hz", 100.0)
+        self.declare_parameter("publish_rate_hz", Parameter.Type.DOUBLE)
 
         self.imu_pub = self.create_publisher(Imu, "imu/front", QOS_HIGH)
-        self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
+        self.create_timer(1.0 / self.get_parameter("publish_rate_hz").value, self.tick)
 
     def tick(self):
         msg = Imu()

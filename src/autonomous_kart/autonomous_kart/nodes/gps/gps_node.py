@@ -4,6 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/23
 """
 
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 
 from autonomous_kart.common import QOS_LOW, run_node
 from kart_interfaces.msg import GpsFix
@@ -12,10 +13,10 @@ from kart_interfaces.msg import GpsFix
 class GpsNode(Node):
     def __init__(self):
         super().__init__("gps_node")
-        self.declare_parameter("publish_hz", 20.0)
+        self.declare_parameter("publish_rate_hz", Parameter.Type.DOUBLE)
 
         self.gps_pub = self.create_publisher(GpsFix, "gps", QOS_LOW)
-        self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
+        self.create_timer(1.0 / self.get_parameter("publish_rate_hz").value, self.tick)
 
     def tick(self):
         msg = GpsFix()

@@ -22,11 +22,11 @@ from kart_interfaces.msg import (
 )
 
 
-def to_inputs(t, odom, telemetry, tracks, line):
+def to_inputs(time, odom, telemetry, tracks, line):
     q = odom.pose.pose.orientation
     yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
     return base.ControllerInputs(
-        t=t,
+        time=time,
         x=odom.pose.pose.position.x,
         y=odom.pose.pose.position.y,
         yaw=yaw,
@@ -55,8 +55,8 @@ def to_inputs(t, odom, telemetry, tracks, line):
 class PathfinderNode(Node):
     def __init__(self):
         super().__init__("pathfinder_node", automatically_declare_parameters_from_overrides=True)
-        system_frequency = float(self.param("system_frequency", 50.0))
-        name = self.param("controller", "pure_pursuit")
+        system_frequency = self.get_parameter("system_frequency").value
+        name = self.get_parameter("controller").value
         params = {k: p.value for k, p in self.get_parameters_by_prefix(name).items()}
         self.controller = make_controller(name, params)
         self.get_logger().info(f"controller {name}")
@@ -74,11 +74,6 @@ class PathfinderNode(Node):
         self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", QOS_HIGH)
         self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", QOS_HIGH)
         self.create_timer(1.0 / system_frequency, self.tick)
-
-    def param(self, name, default):
-        if not self.has_parameter(name):
-            self.declare_parameter(name, default)
-        return self.get_parameter(name).value
 
     def on_odom(self, msg):
         self.odom = msg

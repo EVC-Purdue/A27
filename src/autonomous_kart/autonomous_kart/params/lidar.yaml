@@ -1,4 +1,4 @@
 lidar_node:
   ros__parameters:
-    publish_hz: 10.0
+    publish_rate_hz: 10.0
     num_beams: 3200 # 0.1125 deg at 10 Hz

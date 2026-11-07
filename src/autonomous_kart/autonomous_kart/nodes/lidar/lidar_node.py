@@ -6,6 +6,7 @@ https://github.com/EVC-Purdue/A27/issues/25
 import math
 
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import LaserScan
 
 from autonomous_kart.common import QOS_LOW, run_node
@@ -14,12 +15,12 @@ from autonomous_kart.common import QOS_LOW, run_node
 class LidarNode(Node):
     def __init__(self):
         super().__init__("lidar_node")
-        self.declare_parameter("publish_hz", 10.0)
-        self.declare_parameter("num_beams", 3200)
+        self.declare_parameter("publish_rate_hz", Parameter.Type.DOUBLE)
+        self.declare_parameter("num_beams", Parameter.Type.INTEGER)
         self.num_beams = self.get_parameter("num_beams").value
 
         self.scan_pub = self.create_publisher(LaserScan, "scan", QOS_LOW)
-        self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
+        self.create_timer(1.0 / self.get_parameter("publish_rate_hz").value, self.tick)
 
     def tick(self):
         msg = LaserScan()

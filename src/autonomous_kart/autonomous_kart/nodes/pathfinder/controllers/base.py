@@ -29,7 +29,7 @@ class Track:
 
 @dataclass(frozen=True)
 class ControllerInputs:
-    t: float  # s
+    time: float  # s
     x: float  # m
     y: float  # m
     yaw: float  # rad

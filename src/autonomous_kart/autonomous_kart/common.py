@@ -3,7 +3,11 @@
 https://github.com/EVC-Purdue/A27/issues/11
 """
 
+import os
+import sys
+
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from rclpy.executors import ExternalShutdownException
 from rclpy.qos import (
     DurabilityPolicy,
@@ -47,8 +51,19 @@ QOS_IMAGE = QoSProfile(
 )
 
 
+def with_default_params(name, args):
+    # Loads system.yaml and <name>.yaml first, so command-line and launch params override them
+    args = sys.argv if args is None else args
+    params = os.path.join(get_package_share_directory("autonomous_kart"), "params")
+    defaults = ["--ros-args"]
+    for file in ("system.yaml", f"{name}.yaml"):
+        defaults += ["--params-file", os.path.join(params, file)]
+    return args[:1] + defaults + ["--"] + args[1:]
+
+
 def run_node(node_cls, args=None):
-    rclpy.init(args=args)
+    name = node_cls.__module__.rsplit(".", 1)[-1].removesuffix("_node")
+    rclpy.init(args=with_default_params(name, args))
     node = node_cls()
     try:
         rclpy.spin(node)

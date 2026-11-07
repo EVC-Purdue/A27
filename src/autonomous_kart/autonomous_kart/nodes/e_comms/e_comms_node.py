@@ -5,6 +5,7 @@ https://github.com/EVC-Purdue/A27/issues/27
 """
 
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
 
@@ -15,7 +16,7 @@ from kart_interfaces.msg import DriveCommand, KartTelemetry
 class ECommsNode(Node):
     def __init__(self):
         super().__init__("e_comms_node")
-        self.declare_parameter("publish_hz", 50.0)
+        self.declare_parameter("publish_rate_hz", Parameter.Type.DOUBLE)
         self.last_cmd = DriveCommand()
         self.system_state = None
 
@@ -23,7 +24,7 @@ class ECommsNode(Node):
         self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
         self.telemetry_pub = self.create_publisher(KartTelemetry, "e_comms/telemetry", QOS_HIGH)
         self.imu_pub = self.create_publisher(Imu, "imu/back", QOS_HIGH)
-        self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
+        self.create_timer(1.0 / self.get_parameter("publish_rate_hz").value, self.tick)
 
     def on_cmd(self, msg):
         self.last_cmd = msg

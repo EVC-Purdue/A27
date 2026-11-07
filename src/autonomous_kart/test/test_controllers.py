@@ -21,7 +21,7 @@ from autonomous_kart.nodes.pathfinder.controllers.base import (
 
 def straight_line_inputs(**overrides):
     fields = dict(
-        t=0.0,
+        time=0.0,
         x=0.0,
         y=0.0,
         yaw=0.0,

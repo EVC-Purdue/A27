@@ -4,6 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/22
 """
 
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import Image
 
 from autonomous_kart.common import QOS_IMAGE, run_node
@@ -12,9 +13,9 @@ from autonomous_kart.common import QOS_IMAGE, run_node
 class CameraNode(Node):
     def __init__(self):
         super().__init__("camera_node")
-        self.declare_parameter("frame_rate", 30.0)
-        self.declare_parameter("width", 640)
-        self.declare_parameter("height", 480)
+        self.declare_parameter("frame_rate", Parameter.Type.DOUBLE)
+        self.declare_parameter("width", Parameter.Type.INTEGER)
+        self.declare_parameter("height", Parameter.Type.INTEGER)
         self.width = self.get_parameter("width").value
         self.height = self.get_parameter("height").value
 

@@ -7,6 +7,7 @@ https://github.com/EVC-Purdue/A27/issues/29
 from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu
 from tf2_ros import TransformBroadcaster
 
@@ -22,7 +23,7 @@ from kart_interfaces.msg import (
 class LocalizationNode(Node):
     def __init__(self):
         super().__init__("localization_node")
-        self.declare_parameter("publish_hz", 50.0)
+        self.declare_parameter("publish_rate_hz", Parameter.Type.DOUBLE)
 
         self.create_subscription(GpsFix, "gps", self.on_msg, QOS_LOW)
         self.create_subscription(Imu, "imu/front", self.on_msg, QOS_HIGH)
@@ -32,8 +33,8 @@ class LocalizationNode(Node):
         self.create_subscription(ObjectMeasurementArray, "perception/measurements", self.on_msg, QOS_LOW)
         self.odom_pub = self.create_publisher(Odometry, "odom", QOS_HIGH)
         self.tracks_pub = self.create_publisher(TrackedObjectArray, "localization/tracks", QOS_HIGH)
-        self.tf_broadcaster = TransformBroadcaster(self)
-        self.create_timer(1.0 / self.get_parameter("publish_hz").value, self.tick)
+        self.transform_broadcaster = TransformBroadcaster(self)
+        self.create_timer(1.0 / self.get_parameter("publish_rate_hz").value, self.tick)
 
     def on_msg(self, msg):
         pass
@@ -47,11 +48,11 @@ class LocalizationNode(Node):
         odom.pose.pose.orientation.w = 1.0
         self.odom_pub.publish(odom)
 
-        tf = TransformStamped()
-        tf.header = odom.header
-        tf.child_frame_id = odom.child_frame_id
-        tf.transform.rotation.w = 1.0
-        self.tf_broadcaster.sendTransform(tf)
+        transform = TransformStamped()
+        transform.header = odom.header
+        transform.child_frame_id = odom.child_frame_id
+        transform.transform.rotation.w = 1.0
+        self.transform_broadcaster.sendTransform(transform)
 
         tracks = TrackedObjectArray()
         tracks.header = odom.header
