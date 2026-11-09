@@ -1,3 +1,43 @@
 perception_node:
   ros__parameters:
-    publish_rate_hz: 10.0
+    # Relative to the workspace root (data/ is gitignored). Exported by the
+    # training tooling at a fixed input size. No file means the
+    # camera publishes empty arrays (and says why) while the lidar keeps working.
+    model_path: "data/models/kart_192x320.onnx"
+    confidence: 0.35
+    nms_iou: 0.5
+    cpu_threads: 2 # CPU fallback only (Rubik); leave cores for the controller
+    # Crop as fractions of the frame (x1, y1, x2, y2) before detecting: drops
+    # our own nose so the detector never reports us
+    roi_frac: [0.0, 0.0, 1.0, 0.6]
+    kart_footprint_m: 1.5
+
+    # Camera at the resolution below (scaled to whatever arrives).
+    # PLACEHOLDERS until the camera (#22) is chosen, calibrated and its mount
+    # measured: range is only as good as height and pitch.
+    camera.width_px: 640
+    camera.height_px: 480
+    camera.fx_px: 320.0 # ~90 deg HFOV
+    camera.fy_px: 320.0
+    camera.cx_px: 320.0
+    camera.cy_px: 240.0
+    camera.height_m: 1.2 # lens above ground
+    camera.pitch_deg: 5.0 # positive looks down
+    camera.yaw_deg: 0.0
+    camera.mount_x_m: 0.0 # lens position in base_link
+    camera.mount_y_m: 0.0
+    camera.max_range_m: 40.0
+
+    ranging.kart_height_m: 1.0 # opponent height prior, ground to top of box
+    ranging.kart_height_sigma_m: 0.2
+    ranging.pitch_sigma_deg: 1.0 # chassis bounce the camera model does not know
+    ranging.box_sigma_px: 2.0
+
+    # Lidar (#25) placeholders until its mount is measured
+    lidar.mount_x_m: 0.0
+    lidar.mount_y_m: 0.0
+    lidar.mount_yaw_deg: 0.0
+    lidar.max_range_m: 40.0
+    lidar.cluster_gap_m: 0.4
+    lidar.min_extent_m: 0.3
+    lidar.max_extent_m: 2.5 # longer clusters are barriers, not karts
