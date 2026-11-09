@@ -55,3 +55,18 @@ localization_node:
     train_val_fraction: 0.2
     train_min_improvement: 0.05       # fraction of held-out MSE new weights must beat the current by
     train_seed: 0
+
+    # Tracking other karts and obstacles from perception/measurements
+    tracker:
+      pose_history_s: 0.5             # s of our poses kept, so a late measurement is placed where we were
+      pose_max_gap_s: 0.25            # a measurement stamped further than this from any stored pose is dropped
+      pose_sigma_xy_m: 0.1            # our own pose error, added to each measurement moved to odom
+      pose_sigma_yaw_rad: 0.017       # 1 deg; grows sideways error with range
+      fov_rad: 1.57                   # camera field of view; a track outside it may coast longer
+      max_range_m: 40.0
+      gate_chi2: 16.0                 # 2 dof, association gate on squared Mahalanobis distance
+      confirm_hits: 3                 # hits within confirm_window_s before a track is published
+      confirm_window_s: 0.3
+      max_coast_s: 0.4                # a track in view with no hit for this long is deleted
+      max_coast_out_of_fov_s: 5.0     # a kart beside us in a slow pass stays out of view for seconds
+      min_separation_m: 1.0           # two kart centres cannot be closer, so nearer detections are the same kart

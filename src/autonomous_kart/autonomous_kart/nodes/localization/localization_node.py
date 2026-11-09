@@ -1,5 +1,8 @@
 """Localization node: EKF over [px, py, yaw, v] from IMU, GPS and wheel speed, publishing odom and TF.
 
+Also tracks other karts and obstacles: each perception measurement is moved to the
+odom frame with our pose at its capture stamp, then folded into the tracker.
+
 https://github.com/EVC-Purdue/A27/issues/28
 https://github.com/EVC-Purdue/A27/issues/29
 """
@@ -18,11 +21,25 @@ from tf2_ros import TransformBroadcaster
 from autonomous_kart.common import QOS_HIGH, QOS_LOW, QOS_STATE, run_node
 from autonomous_kart.nodes.localization.ekf import LocalizationEKF
 from autonomous_kart.nodes.localization.gru import GruCorrection
-from kart_interfaces.msg import GpsFix, KartTelemetry, ObjectMeasurementArray, TrackedObjectArray
+from autonomous_kart.nodes.localization.pose_history import PoseHistory, body_to_world, in_view
+from autonomous_kart.nodes.localization.tracker import KartTracker, TrackState, WorldFrame
+from kart_interfaces.msg import GpsFix, KartTelemetry, ObjectMeasurementArray, TrackedObject, TrackedObjectArray
 
 
 def stamp_s(stamp) -> float:
     return stamp.sec + stamp.nanosec * 1e-9
+
+
+def to_tracked_object(t: TrackState) -> TrackedObject:
+    o = TrackedObject()
+    o.id = t.id
+    o.object_class = t.object_class
+    o.footprint_size = t.footprint_m
+    o.position.x, o.position.y = t.x, t.y
+    o.velocity.x, o.velocity.y = t.vx, t.vy
+    o.covariance = [float(v) for v in t.cov_world.reshape(16)]
+    o.age = t.age_s
+    return o
 
 
 class LocalizationNode(Node):
@@ -43,6 +60,9 @@ class LocalizationNode(Node):
         )
         self.trainer = None
         self.system_state = None
+        tracker_params = {k: p.value for k, p in self.get_parameters_by_prefix("tracker").items()}
+        self.tracker = KartTracker(WorldFrame(), tracker_params)
+        self.poses = PoseHistory(self.param("tracker.pose_history_s"))
 
         self.imus = {}  # latest Imu message per topic
         self.omega_z = 0.0  # mean gyro z of the fresh IMUs, rad/s
@@ -57,7 +77,7 @@ class LocalizationNode(Node):
             self.create_subscription(Imu, topic, lambda msg, topic=topic: self.on_imu(topic, msg), QOS_HIGH)
         self.create_subscription(KartTelemetry, "e_comms/telemetry", self.on_telemetry, QOS_HIGH)
         self.create_subscription(PoseWithCovarianceStamped, "slam/pose", self.on_unused, QOS_LOW)
-        self.create_subscription(ObjectMeasurementArray, "perception/measurements", self.on_unused, QOS_LOW)
+        self.create_subscription(ObjectMeasurementArray, "perception/measurements", self.on_measurements, QOS_LOW)
         self.odom_pub = self.create_publisher(Odometry, "odom", QOS_HIGH)
         self.tracks_pub = self.create_publisher(TrackedObjectArray, "localization/tracks", QOS_HIGH)
         self.transform_broadcaster = TransformBroadcaster(self)
@@ -195,6 +215,30 @@ class LocalizationNode(Node):
             f"EKF init: pos=({msg.x:.2f},{msg.y:.2f}) yaw={math.degrees(msg.heading):.1f} deg v={v0:.2f} m/s"
         )
 
+    # Tracking
+
+    def on_measurements(self, msg):
+        stamp = stamp_s(msg.header.stamp)
+        objs = msg.objects
+        pose = self.poses.at(stamp, self.param("tracker.pose_max_gap_s"))
+        if pose is None:
+            if objs:
+                self.get_logger().warning("No pose near the measurement stamp, dropped", throttle_duration_sec=2.0)
+            return
+        xy = np.array([[o.position.x, o.position.y] for o in objs]).reshape(-1, 2)
+        cov = np.array([o.position_covariance for o in objs], dtype=float).reshape(-1, 2, 2)
+        odom_xy, odom_cov = body_to_world(
+            xy, cov, pose, self.param("tracker.pose_sigma_xy_m"), self.param("tracker.pose_sigma_yaw_rad")
+        )
+        self.tracker.step(
+            stamp,
+            odom_xy,
+            odom_cov,
+            classes=[o.object_class for o in objs],
+            footprints_m=[o.footprint_size for o in objs],
+            in_fov=in_view(pose, self.param("tracker.fov_rad"), self.param("tracker.max_range_m")),
+        )
+
     # GRU training
 
     def start_trainer(self):
@@ -241,11 +285,13 @@ class LocalizationNode(Node):
         tracks = TrackedObjectArray()
         tracks.header.stamp = self.get_clock().now().to_msg()
         tracks.header.frame_id = "odom"
+        tracks.objects = [to_tracked_object(t) for t in self.tracker.predicted(stamp_s(tracks.header.stamp))]
         self.tracks_pub.publish(tracks)
         if not self.ekf.initialized:
             return
         odom = self.odometry()
         self.odom_pub.publish(odom)
+        self.poses.add(self.ekf.stamp, tuple(float(v) for v in self.ekf.x))
 
         transform = TransformStamped()
         transform.header = odom.header
