@@ -197,6 +197,9 @@ class LocalizationNode(Node):
         if not self.ekf.initialized:
             self.init_from_fix(msg, stamp, R_xy, have_speed)
             return
+        if self.ekf.history and stamp < self.ekf.history[0].stamp:
+            self.get_logger().warning(f"GPS fix {self.ekf.stamp - stamp:.2f}s old, dropped", throttle_duration_sec=2.0)
+            return
 
         if self.ekf.update_at(stamp, self.ekf.update_gps_xy, msg.x, msg.y, R_xy, self.param("gate_xy")):
             self.rejects = 0

@@ -101,10 +101,10 @@ def test_late_gps_matches_in_order_gps():
     assert late.P == pytest.approx(in_order.P, abs=1e-12)
 
 
-def test_gps_older_than_history_is_applied_now():
+def test_gps_older_than_history_is_dropped():
     ekf = make_ekf(v=2.0)
     drive(ekf, [round(0.01 * k, 2) for k in range(1, 101)])
     assert ekf.history[0].stamp > 0.4
     x = ekf.x.copy()
-    assert ekf.update_at(0.1, ekf.update_gps_xy, x[0] + 0.01, x[1], np.eye(2) * 1e-3, GATE)
-    assert x[0] < ekf.x[0] < x[0] + 0.01
+    assert not ekf.update_at(0.1, ekf.update_gps_xy, x[0] + 0.01, x[1], np.eye(2) * 1e-3, GATE)
+    assert ekf.x == pytest.approx(x)

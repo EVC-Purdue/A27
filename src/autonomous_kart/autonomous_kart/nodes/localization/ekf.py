@@ -99,8 +99,10 @@ class LocalizationEKF:
     def update_at(self, stamp: float, update, *args) -> bool:
         """Apply update(*args) as of stamp, replaying the stored predicts after it when stamp is late."""
         later = [i for i, step in enumerate(self.history) if step.stamp > stamp]
-        if not later or later[0] == 0:
-            # In order, or older than the history: apply now
+        if later and later[0] == 0:
+            # Older than the history: the state it belongs to is gone, so drop it
+            return False
+        if not later:
             if self.history:
                 self.history[-1].updates.append((update, args))
             return update(*args)
