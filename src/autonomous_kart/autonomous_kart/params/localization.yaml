@@ -1,3 +1,57 @@
 localization_node:
   ros__parameters:
     publish_rate_hz: 50.0
+    mode: "ekf"                       # "ekf" or "gru"
+
+    # EKF process-noise spectral densities (units per second)
+    pos_noise: 0.01                   # m^2/s, xy diffusion from unmodeled lateral motion
+    yaw_drift_noise: 0.01             # rad^2/s, unmodeled yaw drift beyond gyro noise
+    speed_drift_noise: 0.5            # (m/s)^2/s, absorbs accel bias and gravity leak from chassis pitch
+    history_s: 0.5                    # s of predicts kept to replay a late GPS fix
+
+    imu_stale_s: 0.05                 # an IMU sample older than this is left out of the mean
+    imu_max_dt_s: 0.1                 # larger IMU gaps are skipped, not integrated
+    imu_dropout_warn_s: 1.0
+    gps_dropout_warn_s: 2.0
+
+    # GPS position sigma floors by fix type (m); DGPS uses the single floor
+    sigma_xy_floor_rtk_fixed_m: 0.02
+    sigma_xy_floor_rtk_float_m: 0.3
+    sigma_xy_floor_single_m: 2.0
+    gps_speed_min_mps: 1.0            # GPS speed below this is mostly noise
+    init_speed_var: 1.0               # (m/s)^2, used when the init fix has no usable speed
+
+    # Re-init after this many consecutive gated-out RTK fixes spanning at least reinit_s
+    reinit_rejects: 2
+    reinit_s: 1.0
+
+    # Gates on squared Mahalanobis distance; heading and speed at chi-square p = 0.001
+    gate_xy: 100.0                    # loose: P is overconfident between sparse fixes, so 13.8 rejected good RTK fixes
+    gate_heading: 10.8                # 1 dof
+    gate_speed: 10.8                  # 1 dof, GPS and wheel speed
+
+    # 1-sigma 0.1 m/s; single axle and no diff bias it in corners
+    wheel_speed_var: 1.0e-2           # (m/s)^2
+
+    # GRU correction, used in "gru" mode
+    gru_correction_gain: 1.0          # 0 to 1, settable live
+    gru_gap_s: 0.1                    # telemetry gap that resets the hidden state
+    gru_clamp_mps: 0.5
+    gru_min_speed_mps: 1.0            # correction is zero below this wheel speed
+    gru_max_gyro_rad_s: 2.0           # and above this yaw rate
+
+    # GRU training, a background process of this node in "gru" mode
+    train_allowed_states: ["MANUAL", "AUTONOMOUS"]
+    train_weights_dir: "~/.kart/localization/gru"
+    train_buffer_s: 600.0
+    train_cycle_s: 60.0
+    train_threads: 2                  # leaves the other cores to the stack
+    train_max_fix_gap_s: 0.3          # GPS velocity targets come from consecutive RTK-fixed fixes closer than this
+    train_seq_len: 100                # telemetry samples per training sequence
+    train_hidden: 32
+    train_lr: 2.0e-3
+    train_batch_size: 32
+    train_epochs: 5
+    train_val_fraction: 0.2
+    train_min_improvement: 0.05       # fraction of held-out MSE new weights must beat the current by
+    train_seed: 0
