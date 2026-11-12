@@ -48,13 +48,13 @@ class LocalizationEKF:
         self.history.clear()
 
     def predict(
-            self,
-            dt: float,
-            omega_z: float,
-            accel_x: float,
-            omega_var: float,
-            accel_var: float,
-            dv: tuple[float, float] = (0.0, 0.0),
+        self,
+        dt: float,
+        omega_z: float,
+        accel_x: float,
+        omega_var: float,
+        accel_var: float,
+        dv: tuple[float, float] = (0.0, 0.0),
     ) -> None:
         """Roll the state forward dt seconds from IMU yaw rate and longitudinal accel.
 
@@ -111,7 +111,7 @@ class LocalizationEKF:
             fn(*fn_args)
         accepted = update(*args)
         start.updates.append((update, args))
-        for step in list(self.history)[later[0]:]:
+        for step in list(self.history)[later[0] :]:
             self.predict(*step.inputs)
             step.x, step.P = self.x.copy(), self.P.copy()
             for fn, fn_args in step.updates:
@@ -139,12 +139,12 @@ class LocalizationEKF:
         return self._linear_update(H, np.array([v_meas]), np.array([[var]]), gate)
 
     def _linear_update(
-            self,
-            H: np.ndarray,
-            z: np.ndarray,
-            R: np.ndarray,
-            gate: float,
-            innovation: np.ndarray | None = None,
+        self,
+        H: np.ndarray,
+        z: np.ndarray,
+        R: np.ndarray,
+        gate: float,
+        innovation: np.ndarray | None = None,
     ) -> bool:
         """Fold a linear measurement into the state unless its Mahalanobis distance fails the chi-square gate."""
         if innovation is None:

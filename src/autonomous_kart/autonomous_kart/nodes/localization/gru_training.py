@@ -75,9 +75,9 @@ def build_windows(imu, telemetry, gps, gap_s: float, max_fix_gap_s: float, seq_l
     ok &= (fdt[i] > 0) & (fdt[i] <= max_fix_gap_s)
     y = np.where(ok[:, None], np.stack([vbx[i] - wheel, vby[i]], axis=1), np.nan)
 
-    windows = [s for s in range(0, len(t) - seq_len + 1, seq_len) if not gap[s + 1: s + seq_len].any()]
-    windows = [s for s in windows if ok[s: s + seq_len].any()]
-    return np.array([x[s: s + seq_len] for s in windows]), np.array([y[s: s + seq_len] for s in windows])
+    windows = [s for s in range(0, len(t) - seq_len + 1, seq_len) if not gap[s + 1 : s + seq_len].any()]
+    windows = [s for s in windows if ok[s : s + seq_len].any()]
+    return np.array([x[s : s + seq_len] for s in windows]), np.array([y[s : s + seq_len] for s in windows])
 
 
 def masked_mse(pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -129,7 +129,7 @@ def train(imu, telemetry, gps, current: bytes | None, p: dict) -> tuple[bytes | 
     )
     x_val, y_val = x[-n_val:], y[-n_val:]
     new_mse = evaluate(model, mu, sd, x_val, y_val)
-    old_mse = evaluate(*from_npz(current), x_val, y_val) if current else float(np.nanmean(y_val ** 2))
+    old_mse = evaluate(*from_npz(current), x_val, y_val) if current else float(np.nanmean(y_val**2))
     if new_mse > old_mse * (1.0 - p["train_min_improvement"]):
         return None, f"GRU training rejected: held-out MSE {new_mse:.4f} vs current {old_mse:.4f}"
     return to_npz(model, mu, sd), f"GRU training accepted: held-out MSE {new_mse:.4f} vs {old_mse:.4f}"
