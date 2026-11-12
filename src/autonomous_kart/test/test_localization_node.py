@@ -81,14 +81,14 @@ def test_gru_mode_trains_in_background_and_saves_accepted_weights(tmp_path):
     node = LocalizationNode()
     try:
         node.train_cycle()
-        assert node.training is None  # no system_state yet, so training must not start
+        assert node.trainer.running is None  # no system_state yet, so training must not start
 
         done = Future()
         npz = to_npz(GruModel(4).double(), np.zeros(4), np.ones(4))
         done.set_result((npz, "GRU training accepted"))
-        node.training = done
+        node.trainer.running = done
         node.collect_training()
-        assert node.training is None and node.weights == npz
+        assert node.trainer.running is None and node.trainer.weights == npz
         saved = list(tmp_path.glob("gru_*.npz"))
         assert len(saved) == 1 and saved[0].read_bytes() == npz
     finally:

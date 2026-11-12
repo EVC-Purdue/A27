@@ -96,12 +96,19 @@ class LocalizationEKF:
         while stamp - self.history[0].stamp > self.history_s:
             self.history.popleft()
 
+    def skip_to(self, stamp: float) -> None:
+        """Move the filter clock to stamp without integrating, after an IMU gap."""
+        self.stamp = stamp
+
+    def too_old(self, stamp: float) -> bool:
+        """True when stamp is older than the stored history, so it can no longer be replayed."""
+        return bool(self.history) and stamp < self.history[0].stamp
+
     def update_at(self, stamp: float, update, *args) -> bool:
         """Apply update(*args) as of stamp, replaying the stored predicts after it when stamp is late."""
-        later = [i for i, step in enumerate(self.history) if step.stamp > stamp]
-        if later and later[0] == 0:
-            # Older than the history: the state it belongs to is gone, so drop it
+        if self.too_old(stamp):
             return False
+        later = [i for i, step in enumerate(self.history) if step.stamp > stamp]
         if not later:
             if self.history:
                 self.history[-1].updates.append((update, args))

@@ -3,7 +3,13 @@
 https://github.com/EVC-Purdue/A27/issues/28
 """
 
+import glob
 import io
+import multiprocessing
+import os
+import time
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 import torch
@@ -133,3 +139,61 @@ def train(imu, telemetry, gps, current: bytes | None, p: dict) -> tuple[bytes | 
     if new_mse > old_mse * (1.0 - p["train_min_improvement"]):
         return None, f"GRU training rejected: held-out MSE {new_mse:.4f} vs current {old_mse:.4f}"
     return to_npz(model, mu, sd), f"GRU training accepted: held-out MSE {new_mse:.4f} vs {old_mse:.4f}"
+
+
+class GruTrainer:
+    """Buffers drive data and runs train() in a background process, one cycle at a time."""
+
+    def __init__(self, weights_dir: str, buffer_s: float):
+        self.weights_dir = os.path.expanduser(weights_dir)
+        self.buffer_s = buffer_s
+        self.imu = deque()  # (stamp, gyro z)
+        self.telemetry = deque()  # (stamp, wheel speed, steering)
+        self.gps = deque()  # (stamp, x, y, heading, fix quality, heading valid)
+        self.weights = None
+        self.running = None
+        # A separate process keeps training off the GIL the filter callbacks need
+        self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
+
+    def start(self, now: float, params: dict) -> None:
+        """Drop data older than buffer_s and start a training cycle unless one is running."""
+        for buf in (self.imu, self.telemetry, self.gps):
+            while buf and buf[0][0] < now - self.buffer_s:
+                buf.popleft()
+        if self.running is None:
+            self.running = self.pool.submit(
+                train, list(self.imu), list(self.telemetry), list(self.gps), self.weights, params
+            )
+
+    def finished(self) -> tuple[bytes | None, str] | None:
+        """The result of a finished cycle, saving accepted weights; None while one is running or none started."""
+        if self.running is None or not self.running.done():
+            return None
+        try:
+            npz, log = self.running.result()
+        except Exception as e:
+            npz, log = None, f"GRU training failed: {type(e).__name__}: {e}"
+        self.running = None
+        if npz is not None:
+            self.weights = npz
+            self.save(npz)
+        return npz, log
+
+    def save(self, npz: bytes) -> None:
+        os.makedirs(self.weights_dir, exist_ok=True)
+        path = os.path.join(self.weights_dir, f"gru_{int(time.time())}.npz")
+        with open(path + ".tmp", "wb") as f:
+            f.write(npz)
+        os.replace(path + ".tmp", path)
+
+    def load_latest(self) -> tuple[bytes, str] | None:
+        """The newest saved weights and their path, or None."""
+        saved = sorted(glob.glob(os.path.join(self.weights_dir, "gru_*.npz")))
+        if not saved:
+            return None
+        with open(saved[-1], "rb") as f:
+            self.weights = f.read()
+        return self.weights, saved[-1]
+
+    def shutdown(self) -> None:
+        self.pool.shutdown(cancel_futures=True)

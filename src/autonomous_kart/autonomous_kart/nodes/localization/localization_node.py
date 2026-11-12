@@ -4,13 +4,7 @@ https://github.com/EVC-Purdue/A27/issues/28
 https://github.com/EVC-Purdue/A27/issues/29
 """
 
-import glob
 import math
-import multiprocessing
-import os
-import time
-from collections import deque
-from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
@@ -34,19 +28,25 @@ def stamp_s(stamp) -> float:
 class LocalizationNode(Node):
     def __init__(self):
         super().__init__("localization_node", automatically_declare_parameters_from_overrides=True)
-        p = self.param
-        self.mode = p("mode")
-        self.ekf = LocalizationEKF(p("pos_noise"), p("yaw_drift_noise"), p("speed_drift_noise"), p("history_s"))
-        self.gru = GruCorrection(p("gru_gap_s"), p("gru_clamp_mps"), p("gru_min_speed_mps"), p("gru_max_gyro_rad_s"))
-        self.sigma_xy_floor = {
-            GpsFix.FIX_RTK_FIXED: p("sigma_xy_floor_rtk_fixed_m"),
-            GpsFix.FIX_RTK_FLOAT: p("sigma_xy_floor_rtk_float_m"),
-        }
+        self.mode = self.param("mode")
+        self.ekf = LocalizationEKF(
+            self.param("pos_noise"),
+            self.param("yaw_drift_noise"),
+            self.param("speed_drift_noise"),
+            self.param("history_s"),
+        )
+        self.gru = GruCorrection(
+            self.param("gru_gap_s"),
+            self.param("gru_clamp_mps"),
+            self.param("gru_min_speed_mps"),
+            self.param("gru_max_gyro_rad_s"),
+        )
+        self.trainer = None
+        self.system_state = None
 
-        # Latest (stamp, gyro z, accel x, gyro var, accel var) per IMU topic
-        self.imus = {}
-        self.omega_z = 0.0
-        self.dv = (0.0, 0.0)
+        self.imus = {}  # latest Imu message per topic
+        self.omega_z = 0.0  # mean gyro z of the fresh IMUs, rad/s
+        self.dv = (0.0, 0.0)  # GRU body-frame velocity correction, m/s
         self.last_imu_t = None
         self.last_gps_t = None
         self.rejects = 0
@@ -61,32 +61,12 @@ class LocalizationNode(Node):
         self.odom_pub = self.create_publisher(Odometry, "odom", QOS_HIGH)
         self.tracks_pub = self.create_publisher(TrackedObjectArray, "localization/tracks", QOS_HIGH)
         self.transform_broadcaster = TransformBroadcaster(self)
-        self.create_timer(1.0 / p("publish_rate_hz"), self.tick)
+        self.create_timer(1.0 / self.param("publish_rate_hz"), self.tick)
         self.create_timer(1.0, self.watchdog)
+
         if self.mode == "gru":
-            self.start_training()
+            self.start_trainer()
         self.get_logger().info(f"Localization node started in {self.mode} mode")
-
-    def start_training(self):
-        # torch is only needed in gru mode
-        from autonomous_kart.nodes.localization.gru_training import train
-
-        self.train = train
-        self.weights = None
-        self.weights_dir = os.path.expanduser(self.param("train_weights_dir"))
-        self.buffers = {"imu": deque(), "telemetry": deque(), "gps": deque()}
-        self.state = None
-        self.training = None
-        # A separate process keeps training off the GIL the filter callbacks need
-        self.trainer = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"))
-        self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
-        self.create_timer(self.param("train_cycle_s"), self.train_cycle)
-        self.create_timer(1.0, self.collect_training)
-        saved = sorted(glob.glob(os.path.join(self.weights_dir, "gru_*.npz")))
-        if saved:
-            with open(saved[-1], "rb") as f:
-                self.load_weights(f.read())
-            self.get_logger().info(f"GRU weights loaded from {saved[-1]}")
 
     def param(self, name):
         return self.get_parameter(name).value
@@ -97,57 +77,19 @@ class LocalizationNode(Node):
     def on_unused(self, msg):
         pass
 
-    def on_state(self, msg):
-        self.state = msg.data
-
-    def load_weights(self, npz: bytes):
-        self.gru.load(npz)
-        self.weights = npz
-
-    def train_cycle(self):
-        oldest = self.now_s() - self.param("train_buffer_s")
-        for buf in self.buffers.values():
-            while buf and buf[0][0] < oldest:
-                buf.popleft()
-        if self.state not in self.param("train_allowed_states") or self.training is not None:
-            return
-        params = {k: v.value for k, v in self.get_parameters_by_prefix("").items() if k.startswith(("train_", "gru_"))}
-        snapshot = [list(buf) for buf in self.buffers.values()]
-        self.training = self.trainer.submit(self.train, *snapshot, self.weights, params)
-
-    def collect_training(self):
-        if self.training is None or not self.training.done():
-            return
-        try:
-            npz, log = self.training.result()
-        except Exception as e:
-            npz, log = None, f"GRU training failed: {type(e).__name__}: {e}"
-        self.training = None
-        self.get_logger().info(log)
-        if npz is None:
-            return
-        self.load_weights(npz)
-        os.makedirs(self.weights_dir, exist_ok=True)
-        path = os.path.join(self.weights_dir, f"gru_{int(time.time())}.npz")
-        with open(path + ".tmp", "wb") as f:
-            f.write(npz)
-        os.replace(path + ".tmp", path)
+    # IMU and wheel speed
 
     def on_imu(self, topic, msg):
         stamp = stamp_s(msg.header.stamp)
         self.last_imu_t = self.now_s()
-        self.imus[topic] = (
-            stamp,
-            msg.angular_velocity.z,
-            msg.linear_acceleration.x,
-            msg.angular_velocity_covariance[8],
-            msg.linear_acceleration_covariance[0],
-        )
-        fresh = [s[1:] for s in self.imus.values() if stamp - s[0] <= self.param("imu_stale_s")]
-        omega_z, accel_x, omega_var, accel_var = np.mean(fresh, axis=0)
-        self.omega_z = float(omega_z)
-        if self.mode == "gru":
-            self.buffers["imu"].append((stamp, msg.angular_velocity.z))
+        self.imus[topic] = msg
+        fresh = [m for m in self.imus.values() if stamp - stamp_s(m.header.stamp) <= self.param("imu_stale_s")]
+        self.omega_z = float(np.mean([m.angular_velocity.z for m in fresh]))
+        accel_x = float(np.mean([m.linear_acceleration.x for m in fresh]))
+        omega_var = float(np.mean([m.angular_velocity_covariance[8] for m in fresh]))
+        accel_var = float(np.mean([m.linear_acceleration_covariance[0] for m in fresh]))
+        if self.trainer:
+            self.trainer.imu.append((stamp, msg.angular_velocity.z))
         if not self.ekf.initialized:
             return
 
@@ -155,86 +97,138 @@ class LocalizationNode(Node):
         if dt <= 0.0:
             return
         if dt > self.param("imu_max_dt_s"):
-            # Skip the gap instead of integrating across it
-            self.get_logger().warning(f"IMU dt out of range: {dt:.3f}s", throttle_duration_sec=2.0)
-            self.ekf.stamp = stamp
+            self.get_logger().warning(f"IMU gap of {dt:.3f}s skipped", throttle_duration_sec=2.0)
+            self.ekf.skip_to(stamp)
             return
-        self.ekf.advance(stamp, self.omega_z, float(accel_x), float(omega_var), float(accel_var), self.dv)
+        self.ekf.advance(stamp, self.omega_z, accel_x, omega_var, accel_var, self.dv)
 
     def on_telemetry(self, msg):
         if not math.isfinite(msg.wheel_speed):
             return
         stamp = stamp_s(msg.header.stamp)
-        if self.mode == "gru" and math.isfinite(msg.steering_angle):
+        if self.trainer and math.isfinite(msg.steering_angle):
             gain = min(max(self.param("gru_correction_gain"), 0.0), 1.0)
-            dv = gain * self.gru.step(stamp, msg.wheel_speed, self.omega_z, msg.steering_angle)
-            self.dv = (float(dv[0]), float(dv[1]))
-            self.buffers["telemetry"].append((stamp, msg.wheel_speed, msg.steering_angle))
+            dvx, dvy = gain * self.gru.step(stamp, msg.wheel_speed, self.omega_z, msg.steering_angle)
+            self.dv = (float(dvx), float(dvy))
+            self.trainer.telemetry.append((stamp, msg.wheel_speed, msg.steering_angle))
         if not self.ekf.initialized:
             return
-        wheel_var, gate = self.param("wheel_speed_var"), self.param("gate_speed")
-        if not self.ekf.update_at(stamp, self.ekf.update_speed, msg.wheel_speed, wheel_var, gate):
-            self.get_logger().warning("Wheel speed rejected by gate", throttle_duration_sec=2.0)
+        if not self.ekf.update_at(
+            stamp, self.ekf.update_speed, msg.wheel_speed, self.param("wheel_speed_var"), self.param("gate_speed")
+        ):
+            self.get_logger().warning("Wheel speed rejected", throttle_duration_sec=2.0)
+
+    # GPS
 
     def on_gps(self, msg):
-        if msg.fix_quality == GpsFix.FIX_NONE:
-            return
-        cov = msg.position_covariance
-        values = (msg.x, msg.y, msg.heading, msg.speed, *cov, msg.heading_variance, msg.speed_variance)
-        if not all(map(math.isfinite, values)) or min(cov[0], cov[3], msg.heading_variance, msg.speed_variance) < 0:
+        if not self.usable(msg):
             return
         stamp = stamp_s(msg.header.stamp)
         self.last_gps_t = self.now_s()
-        if self.mode == "gru":
-            self.buffers["gps"].append((stamp, msg.x, msg.y, msg.heading, msg.fix_quality, msg.heading_valid))
-
-        floor = self.sigma_xy_floor.get(msg.fix_quality, self.param("sigma_xy_floor_single_m")) ** 2
-        R_xy = np.array(cov, dtype=float).reshape(2, 2)
-        R_xy[0, 0] = max(R_xy[0, 0], floor)
-        R_xy[1, 1] = max(R_xy[1, 1], floor)
-        have_speed = msg.speed > self.param("gps_speed_min_mps")
+        if self.trainer:
+            self.trainer.gps.append((stamp, msg.x, msg.y, msg.heading, msg.fix_quality, msg.heading_valid))
 
         if not self.ekf.initialized:
-            self.init_from_fix(msg, stamp, R_xy, have_speed)
+            self.init_from_fix(msg, stamp)
             return
-        if self.ekf.history and stamp < self.ekf.history[0].stamp:
+        if self.ekf.too_old(stamp):
             self.get_logger().warning(f"GPS fix {self.ekf.stamp - stamp:.2f}s old, dropped", throttle_duration_sec=2.0)
             return
 
-        if self.ekf.update_at(stamp, self.ekf.update_gps_xy, msg.x, msg.y, R_xy, self.param("gate_xy")):
+        R = self.position_covariance(msg)
+        if self.ekf.update_at(stamp, self.ekf.update_gps_xy, msg.x, msg.y, R, self.param("gate_xy")):
             self.rejects = 0
-        elif msg.fix_quality in (GpsFix.FIX_RTK_FIXED, GpsFix.FIX_RTK_FLOAT):
-            # Repeated confident fixes that disagree mean the filter has diverged, not the GPS
-            self.get_logger().warning("GPS fix rejected by gate", throttle_duration_sec=2.0)
-            if self.rejects == 0:
-                self.first_reject_t = stamp
-            self.rejects += 1
-            if self.rejects >= self.param("reinit_rejects") and stamp - self.first_reject_t >= self.param("reinit_s"):
-                self.init_from_fix(msg, stamp, R_xy, have_speed)
-                return
-
+        elif msg.fix_quality in (GpsFix.FIX_RTK_FIXED, GpsFix.FIX_RTK_FLOAT) and self.diverged(stamp):
+            self.init_from_fix(msg, stamp)
+            return
         if msg.heading_valid:
             self.ekf.update_at(
                 stamp, self.ekf.update_heading, msg.heading, msg.heading_variance, self.param("gate_heading")
             )
-        if have_speed:
+        if msg.speed > self.param("gps_speed_min_mps"):
             self.ekf.update_at(stamp, self.ekf.update_speed, msg.speed, msg.speed_variance, self.param("gate_speed"))
 
-    def init_from_fix(self, msg, stamp, R_xy, have_speed):
+    @staticmethod
+    def usable(msg) -> bool:
+        cov = msg.position_covariance
+        values = (msg.x, msg.y, msg.heading, msg.speed, *cov, msg.heading_variance, msg.speed_variance)
+        return (
+            msg.fix_quality != GpsFix.FIX_NONE
+            and all(map(math.isfinite, values))
+            and min(cov[0], cov[3], msg.heading_variance, msg.speed_variance) >= 0
+        )
+
+    def position_covariance(self, msg) -> np.ndarray:
+        """The fix's 2x2 covariance with each variance raised to the floor for its fix type."""
+        floor_m = {
+            GpsFix.FIX_RTK_FIXED: self.param("sigma_xy_floor_rtk_fixed_m"),
+            GpsFix.FIX_RTK_FLOAT: self.param("sigma_xy_floor_rtk_float_m"),
+        }.get(msg.fix_quality, self.param("sigma_xy_floor_single_m"))
+        R = np.array(msg.position_covariance, dtype=float).reshape(2, 2)
+        R[0, 0] = max(R[0, 0], floor_m**2)
+        R[1, 1] = max(R[1, 1], floor_m**2)
+        return R
+
+    def diverged(self, stamp) -> bool:
+        """Count a rejected RTK fix; True once enough of them span reinit_s."""
+        # Repeated confident fixes that disagree mean the filter has diverged, not the GPS
+        self.get_logger().warning("GPS fix rejected by gate", throttle_duration_sec=2.0)
+        if self.rejects == 0:
+            self.first_reject_t = stamp
+        self.rejects += 1
+        return self.rejects >= self.param("reinit_rejects") and stamp - self.first_reject_t >= self.param("reinit_s")
+
+    def init_from_fix(self, msg, stamp):
         if self.last_imu_t is None:
             return
         if not msg.heading_valid:
             # Seeding yaw at 0 points the kart east and nothing observes yaw at rest
             self.get_logger().warning("EKF waiting to init: no heading solution yet", throttle_duration_sec=5.0)
             return
+        R = self.position_covariance(msg)
+        have_speed = msg.speed > self.param("gps_speed_min_mps")
         v0 = msg.speed if have_speed else 0.0
         var_v0 = msg.speed_variance if have_speed else self.param("init_speed_var")
-        P0 = np.diag([R_xy[0, 0], R_xy[1, 1], msg.heading_variance, var_v0])
-        self.ekf.reset(msg.x, msg.y, msg.heading, v0, P0, stamp)
+        self.ekf.reset(msg.x, msg.y, msg.heading, v0, np.diag([R[0, 0], R[1, 1], msg.heading_variance, var_v0]), stamp)
         self.rejects = 0
         self.get_logger().info(
             f"EKF init: pos=({msg.x:.2f},{msg.y:.2f}) yaw={math.degrees(msg.heading):.1f} deg v={v0:.2f} m/s"
         )
+
+    # GRU training
+
+    def start_trainer(self):
+        # torch is only needed in gru mode
+        from autonomous_kart.nodes.localization.gru_training import GruTrainer
+
+        self.trainer = GruTrainer(self.param("train_weights_dir"), self.param("train_buffer_s"))
+        saved = self.trainer.load_latest()
+        if saved:
+            self.gru.load(saved[0])
+            self.get_logger().info(f"GRU weights loaded from {saved[1]}")
+        self.create_subscription(String, "system_state", self.on_system_state, QOS_STATE)
+        self.create_timer(self.param("train_cycle_s"), self.train_cycle)
+        self.create_timer(1.0, self.collect_training)
+
+    def on_system_state(self, msg):
+        self.system_state = msg.data
+
+    def train_cycle(self):
+        if self.system_state not in self.param("train_allowed_states"):
+            return
+        params = {k: v.value for k, v in self.get_parameters_by_prefix("").items() if k.startswith(("train_", "gru_"))}
+        self.trainer.start(self.now_s(), params)
+
+    def collect_training(self):
+        result = self.trainer.finished()
+        if result is None:
+            return
+        npz, log = result
+        self.get_logger().info(log)
+        if npz is not None:
+            self.gru.load(npz)
+
+    # Output
 
     def watchdog(self):
         now = self.now_s()
@@ -244,14 +238,24 @@ class LocalizationNode(Node):
             self.get_logger().warning(f"GPS dropout: {now - self.last_gps_t:.1f}s since last fix")
 
     def tick(self):
-        now = self.get_clock().now().to_msg()
         tracks = TrackedObjectArray()
-        tracks.header.stamp = now
+        tracks.header.stamp = self.get_clock().now().to_msg()
         tracks.header.frame_id = "odom"
         self.tracks_pub.publish(tracks)
         if not self.ekf.initialized:
             return
+        odom = self.odometry()
+        self.odom_pub.publish(odom)
 
+        transform = TransformStamped()
+        transform.header = odom.header
+        transform.child_frame_id = odom.child_frame_id
+        transform.transform.translation.x = odom.pose.pose.position.x
+        transform.transform.translation.y = odom.pose.pose.position.y
+        transform.transform.rotation = odom.pose.pose.orientation
+        self.transform_broadcaster.sendTransform(transform)
+
+    def odometry(self) -> Odometry:
         px, py, yaw, v = self.ekf.x
         P = self.ekf.P
         odom = Odometry()
@@ -264,26 +268,16 @@ class LocalizationNode(Node):
         odom.pose.pose.orientation.z = math.sin(yaw / 2.0)
         odom.pose.pose.orientation.w = math.cos(yaw / 2.0)
         # Row-major 6x6 over [x, y, z, roll, pitch, yaw]; z, roll and pitch are unobserved
-        cov = [0.0] * 36
-        cov[0], cov[1], cov[5] = P[0, 0], P[0, 1], P[0, 2]
-        cov[6], cov[7], cov[11] = P[1, 0], P[1, 1], P[1, 2]
-        cov[30], cov[31], cov[35] = P[2, 0], P[2, 1], P[2, 2]
-        odom.pose.covariance = [float(c) for c in cov]
+        pose_cov = np.zeros((6, 6))
+        pose_cov[np.ix_([0, 1, 5], [0, 1, 5])] = P[:3, :3]
+        odom.pose.covariance = pose_cov.ravel().tolist()
         odom.twist.twist.linear.x = float(v) + self.dv[0]
         odom.twist.twist.linear.y = self.dv[1]
         odom.twist.twist.angular.z = self.omega_z
-        twist_cov = [0.0] * 36
-        twist_cov[0] = float(P[3, 3])
-        odom.twist.covariance = twist_cov
-        self.odom_pub.publish(odom)
-
-        transform = TransformStamped()
-        transform.header = odom.header
-        transform.child_frame_id = odom.child_frame_id
-        transform.transform.translation.x = odom.pose.pose.position.x
-        transform.transform.translation.y = odom.pose.pose.position.y
-        transform.transform.rotation = odom.pose.pose.orientation
-        self.transform_broadcaster.sendTransform(transform)
+        twist_cov = np.zeros(36)
+        twist_cov[0] = P[3, 3]
+        odom.twist.covariance = twist_cov.tolist()
+        return odom
 
 
 def main(args=None):
