@@ -41,7 +41,7 @@ localization_node:
     gru_max_gyro_rad_s: 2.0           # and above this yaw rate
 
     # GRU training, a background process of this node in "gru" mode
-    train_allowed_states: ["MANUAL", "AUTONOMOUS"]
+    train_allowed_states: ["AUTONOMOUS"]
     train_weights_dir: "~/.kart/localization/gru"
     train_buffer_s: 600.0
     train_cycle_s: 60.0
