@@ -48,7 +48,7 @@ localization_node:
     train_threads: 2                  # leaves the other cores to the stack
     train_max_fix_gap_s: 0.3          # GPS velocity targets come from consecutive RTK-fixed fixes closer than this
     train_seq_len: 100                # telemetry samples per training sequence
-    train_hidden: 32
+    train_hidden: 64
     train_lr: 2.0e-3
     train_batch_size: 32
     train_epochs: 5
