@@ -1,0 +1,5 @@
+recorder_node:
+  ros__parameters:
+    split_s: 10 # one MCAP file per this many seconds
+    record_images: false # SLAM and 3DGS work needs images in the bag
+    min_free_gb: 20.0 # below this, the oldest confirmed runs are deleted

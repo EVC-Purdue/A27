@@ -1,13 +1,17 @@
-"""Launches bringup_sim and checks every topic flows and cmd_drive reaches e_comms.
+"""Launches bringup_sim: topics flow, cmd_drive reaches e_comms, the API and bridge answer, and drives are recorded.
 
 https://github.com/EVC-Purdue/A27/issues/11
+https://github.com/EVC-Purdue/A27/issues/20
 """
 
+import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import time
+import urllib.request
 
 import pytest
 
@@ -31,6 +35,7 @@ from kart_interfaces.msg import (  # noqa: E402
 
 TOPICS = {
     "system_state": (String, QOS_STATE),
+    "host/info": (String, QOS_STATE),
     "camera/image_raw": (Image, QOS_IMAGE),
     "gps": (GpsFix, QOS_LOW),
     "imu/front": (Imu, QOS_HIGH),
@@ -97,3 +102,50 @@ def test_cmd_drive_reaches_e_comms(stack):
             break
         time.sleep(0.2)
     assert "e_comms_node" in subscribers
+
+
+def wait_for(check, timeout_s=20.0):
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            return check()
+        except OSError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.5)
+
+
+def test_master_api_answers(stack):
+    with wait_for(lambda: urllib.request.urlopen("http://localhost:8000/state", timeout=2)) as response:
+        assert json.load(response)["state"] == "IDLE"
+
+
+def test_foxglove_bridge_listens(stack):
+    wait_for(lambda: socket.create_connection(("localhost", 8765), timeout=2)).close()
+
+
+def api(path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(f"http://localhost:8000{path}", data, {"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.load(response)
+
+
+def test_drive_is_recorded(stack):
+    since = wait_for(lambda: api("/runs"))["now"]
+    api("/state", {"state": "MANUAL"})
+    time.sleep(12.0)
+    api("/state", {"state": "IDLE"})
+
+    deadline = time.monotonic() + 20.0
+    finished = []
+    while time.monotonic() < deadline and not finished:
+        finished = [r for r in api(f"/runs?since={since}")["runs"] if not r["recording"]]
+        time.sleep(0.5)
+    assert len(finished) == 1
+    run = finished[0]
+    paths = [f["path"] for f in run["files"]]
+    assert len([p for p in paths if p.endswith(".mcap")]) >= 2
+    assert {"bag/metadata.yaml", "manifest.json", "params_start.json"} <= set(paths)
+    manifest = api(f"/runs/{run['name']}/files/manifest.json")
+    assert manifest["trigger_state"] == "MANUAL" and manifest["hosts"]

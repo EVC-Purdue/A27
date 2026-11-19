@@ -3,3 +3,4 @@
     simulation_mode: false
     system_state: "IDLE" # "STOPPED", "IDLE", "MANUAL", "AUTONOMOUS"
     system_frequency_hz: 50.0 # control loop
+    bag_dir: "~/kart_bags" # one run_* folder per drive

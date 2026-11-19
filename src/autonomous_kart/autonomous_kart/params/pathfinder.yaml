@@ -1,4 +1,5 @@
 pathfinder_node:
   ros__parameters:
+    manual_timeout_s: 0.5 # MANUAL commands older than this stop the kart
     controller: "pure_pursuit" # "pure_pursuit", "mpcc", "rl"
     # Each controller reads its own block, e.g. pure_pursuit.lookahead, mpcc.horizon, rl.alpha_max

@@ -20,6 +20,7 @@ NODES = [
     "slam",
     "gs3d",
     "pathfinder",
+    "recorder",
 ]
 
 
@@ -44,6 +45,15 @@ def generate_launch_description():
                     )
                     for n in NODES
                 ]
+                # Names itself after its host, so each host in the cluster runs one
+                + [Node(package="autonomous_kart", executable="host_node")]
+            ),
+            # Pushes subscribed topics to laptops over a websocket, so viewers never poll the kart
+            Node(
+                package="foxglove_bridge",
+                executable="foxglove_bridge",
+                name="foxglove_bridge",
+                parameters=[{"capabilities": ["connectionGraph"]}],  # read-only: commands go through master's API
             ),
         ]
     )
