@@ -2,4 +2,18 @@ pathfinder_node:
   ros__parameters:
     manual_timeout_s: 0.5 # MANUAL commands older than this stop the kart
     controller: "pure_pursuit" # "pure_pursuit", "mpcc", "rl"
+    line_path: "" # racing line CSV; empty publishes a 10 m straight line
     # Each controller reads its own block, e.g. pure_pursuit.lookahead, mpcc.horizon, rl.alpha_max
+    pure_pursuit:
+      wheelbase_m: 1.05
+      max_steering_rad: 0.45 # road-wheel angle
+      lookahead_time_s: 0.6 # lookahead distance = speed * this, clamped below
+      min_lookahead_m: 2.0
+      max_lookahead_m: 8.0
+      lateral_accel_max_mps2: 6.0 # friction limit for corner speed
+      brake_decel_mps2: 4.0 # how hard the speed profile slows ahead of a corner
+      speed_cap_mps: 8.0
+      preview_m: 30.0 # distance ahead the speed profile looks for corners
+      search_window: 50 # points ahead searched for the nearest point each tick
+      resync_m: 5.0 # a nearest point farther than this triggers a full search
+      closed_gap_m: 3.0 # a line whose ends are closer than this wraps around

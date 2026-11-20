@@ -1,4 +1,4 @@
-"""Pathfinder node: publishes a straight line, runs the controller in AUTONOMOUS, forwards laptop commands in MANUAL.
+"""Pathfinder node: publishes the racing line, runs the controller in AUTONOMOUS, forwards laptop commands in MANUAL.
 
 https://github.com/EVC-Purdue/A27/issues/10
 https://github.com/EVC-Purdue/A27/issues/13
@@ -9,10 +9,11 @@ import math
 
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Header, String
 
 from autonomous_kart.common import QOS_HIGH, QOS_LOW, QOS_STATE, run_node
 from autonomous_kart.nodes.pathfinder.controllers import base, make_controller
+from autonomous_kart.nodes.pathfinder.line import load_line
 from kart_interfaces.msg import (
     DriveCommand,
     KartTelemetry,
@@ -63,6 +64,15 @@ class PathfinderNode(Node):
         params = {k: p.value for k, p in self.get_parameters_by_prefix(name).items()}
         self.controller = make_controller(name, params)
         self.get_logger().info(f"controller {name}")
+        line_path = self.get_parameter("line_path").value
+        if line_path:
+            points = load_line(line_path)
+            self.get_logger().info(f"line {line_path}, {len(points)} points")
+        else:
+            points = tuple(base.LinePoint(float(i), 0.0, 0.0, 0.0) for i in range(10))
+        self.line_points = [
+            LinePoint(x=p.x_m, y=p.y_m, curvature=p.curvature_radpm, target_speed=p.target_speed_mps) for p in points
+        ]
 
         self.system_state = None
         self.odom = None
@@ -70,6 +80,7 @@ class PathfinderNode(Node):
         self.tracks = TrackedObjectArray()
         self.manual_cmd = None
         self.manual_time = None
+        self.cmd_count = 0
 
         self.create_subscription(Odometry, "odom", self.on_odom, QOS_HIGH)
         self.create_subscription(TrackedObjectArray, "localization/tracks", self.on_tracks, QOS_HIGH)
@@ -79,6 +90,10 @@ class PathfinderNode(Node):
         self.line_pub = self.create_publisher(Line, "pathfinder/line", QOS_HIGH)
         self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", QOS_HIGH)
         self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", QOS_HIGH)
+        # Sim lockstep: one Header per tick, frame_id = cmd_drive messages published so far
+        self.tick_pub = self.create_publisher(Header, "pathfinder/tick", QOS_LOW)
+        self.planner_pub = self.create_publisher(String, "pathfinder/active_planner", QOS_STATE)
+        self.planner_pub.publish(String(data=name))
         self.create_timer(1.0 / system_frequency_hz, self.tick)
 
     def on_odom(self, msg):
@@ -105,7 +120,7 @@ class PathfinderNode(Node):
         line = Line()
         line.header.stamp = now.to_msg()
         line.header.frame_id = "odom"
-        line.points = [LinePoint(x=float(i), y=0.0, curvature=0.0, target_speed=0.0) for i in range(10)]
+        line.points = self.line_points
         self.line_pub.publish(line)
 
         # AUTONOMOUS runs the controller, MANUAL forwards fresh laptop commands, every other state commands no motion
@@ -132,7 +147,9 @@ class PathfinderNode(Node):
         cmd.steering = out.steering_rad
         cmd.electrical_brake = out.electrical_brake
         self.cmd_pub.publish(cmd)
+        self.cmd_count += 1
         self.brake_pub.publish(Bool(data=out.mechanical_brake))
+        self.tick_pub.publish(Header(stamp=line.header.stamp, frame_id=str(self.cmd_count)))
 
 
 def main(args=None):

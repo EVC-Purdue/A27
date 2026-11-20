@@ -57,8 +57,8 @@ def test_unknown_controller_raises():
     ],
     ids=["straight", "standstill", "kart_ahead"],
 )
-def test_step_returns_valid_output(name, inputs):
-    controller = make_controller(name, {})
+def test_step_returns_valid_output(name, inputs, pathfinder_params):
+    controller = make_controller(name, pathfinder_params.get(name, {}))
     assert isinstance(controller, Controller)
     out = controller.step(inputs)
     assert isinstance(out, ControllerOutput)
@@ -68,8 +68,8 @@ def test_step_returns_valid_output(name, inputs):
 
 
 @pytest.mark.parametrize("name", sorted(CONTROLLERS))
-def test_reset_then_step(name):
-    controller = make_controller(name, {})
+def test_reset_then_step(name, pathfinder_params):
+    controller = make_controller(name, pathfinder_params.get(name, {}))
     controller.step(straight_line_inputs())
     controller.reset()
     assert isinstance(controller.step(straight_line_inputs()), ControllerOutput)
