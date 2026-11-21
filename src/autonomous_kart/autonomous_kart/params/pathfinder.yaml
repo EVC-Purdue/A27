@@ -2,7 +2,7 @@ pathfinder_node:
   ros__parameters:
     manual_timeout_s: 0.5 # MANUAL commands older than this stop the kart
     controller: "pure_pursuit" # "pure_pursuit", "mpcc", "rl"
-    line_path: "" # racing line CSV; empty publishes a 10 m straight line
+    line_path: "line.csv" # racing line CSV; a relative path is under the package's lines/ folder
     # Each controller reads its own block, e.g. pure_pursuit.lookahead, mpcc.horizon, rl.alpha_max
     pure_pursuit:
       wheelbase_m: 1.05
@@ -16,4 +16,18 @@ pathfinder_node:
       preview_m: 30.0 # distance ahead the speed profile looks for corners
       search_window: 50 # points ahead searched for the nearest point each tick
       resync_m: 5.0 # a nearest point farther than this triggers a full search
-      closed_gap_m: 3.0 # a line whose ends are closer than this wraps around
+      closed_gap_m: 3.0 # a line whose ends are closer than this, and longer than closed_min_length_m, wraps around
+      closed_min_length_m: 30.0
+      search_max_heading_error_rad: 1.5708 # a full-line search only takes points heading within this of the kart
+      min_target_m: 0.5 # a lookahead target this close gives no heading, so the kart holds straight
+      rejoin_cte_activate_m: 3.0 # cross-track error that starts a Bezier rejoin
+      rejoin_cte_deactivate_m: 1.0 # cross-track error that hands back to the racing line
+      rejoin_merge_lookahead_m: 15.0 # how far ahead on the racing line the rejoin merges
+      rejoin_retry_lookahead_factor: 1.5 # a rejoin tighter than rejoin_min_radius_m retries once this much farther ahead
+      rejoin_min_radius_m: 2.0 # tightest turn the rejoin may ask for
+      rejoin_handle_fraction: 0.333 # Bezier handle length as a fraction of the kart-to-merge distance
+      rejoin_min_handle_m: 1.0 # shortest Bezier handle
+      rejoin_min_gap_m: 0.5 # a merge point closer than this needs no rejoin
+      rejoin_end_points: 5 # the rejoin hands back to the racing line this many points before its end
+      rejoin_samples: 50
+      rejoin_start_speed_fraction: 0.4 # rejoin starts at this fraction of the merge point's speed

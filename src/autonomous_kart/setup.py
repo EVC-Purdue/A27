@@ -16,6 +16,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", glob("autonomous_kart/launch/*.py")),
         ("share/" + package_name + "/params", glob("autonomous_kart/params/*.yaml")),
+        ("share/" + package_name + "/lines", glob("autonomous_kart/lines/*.csv")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
