@@ -1,4 +1,4 @@
-"""Cubic Bezier path from the kart back onto the racing line, as A26 pure pursuit used when the kart was far off it.
+"""Rejoin: a Bezier curve from the kart back onto the racing line, used when the kart is far off it.
 
 https://github.com/EVC-Purdue/A27/issues/13
 """
@@ -6,66 +6,93 @@ https://github.com/EVC-Purdue/A27/issues/13
 import math
 
 from autonomous_kart.nodes.pathfinder.controllers.base import LinePoint
-from autonomous_kart.nodes.pathfinder.controllers.path import heading_at, index_ahead
+from autonomous_kart.nodes.pathfinder.controllers.path import Path
 
 
-def rejoin_path(line, closest, closed, x, y, yaw, params):
-    # params is the pure_pursuit block of pathfinder.yaml
-    merge_lookahead_m = params["rejoin_merge_lookahead_m"]
-    min_radius_m = params["rejoin_min_radius_m"]
-    samples = params["rejoin_samples"]
-    start_speed_fraction = params["rejoin_start_speed_fraction"]
+class RejoinPlanner:
+    def __init__(self, params: dict):
+        self.merge_distance_m = params["rejoin_merge_distance_m"]
+        self.min_radius_m = params["rejoin_min_radius_m"]
+        self.retry_factor = params["rejoin_retry_factor"]
+        self.handle_fraction = params["rejoin_handle_fraction"]
+        self.min_handle_m = params["rejoin_min_handle_m"]
+        self.min_gap_m = params["rejoin_min_gap_m"]
+        self.points = params["rejoin_points"]
+        self.start_speed_fraction = params["rejoin_start_speed_fraction"]
 
-    start = (x, y)
-    # A curve tighter than the kart can turn gets one retry with the merge point farther ahead
-    for lookahead_m in (merge_lookahead_m, params["rejoin_retry_lookahead_factor"] * merge_lookahead_m):
-        merge = index_ahead(line, closest, lookahead_m, closed)
-        if merge == closest:  # past the end of an open line, nothing is left to merge onto
+    def plan(self, line, line_index, x, y, yaw):
+        # Returns the rejoin Path, or None when there is nothing ahead worth curving to
+        curve, merge_index = self.curve_to_line(line, line_index, x, y, yaw, self.merge_distance_m)
+        if curve is not None and self.too_tight(curve):
+            farther_m = self.merge_distance_m * self.retry_factor
+            curve, merge_index = self.curve_to_line(line, line_index, x, y, yaw, farther_m)
+        if curve is None:
             return None
-        end = (line[merge].x_m, line[merge].y_m)
-        gap_m = math.dist(start, end)
-        if gap_m < params["rejoin_min_gap_m"]:
-            return None
-        handle_m = max(gap_m * params["rejoin_handle_fraction"], params["rejoin_min_handle_m"])
-        controls = bezier_controls(start, yaw, end, heading_at(line, merge), handle_m)
-        tightest = max(abs(bezier_curvature(controls, k / samples)) for k in range(samples + 1))
-        if tightest <= 1.0 / min_radius_m:
-            break
+        return self.sample(curve, line.points[merge_index].target_speed_mps)
 
-    # Starts slow and ramps up to the merge point's speed
-    merge_speed = line[merge].target_speed_mps
-    points = []
-    for k in range(samples + 1):
-        t = k / samples
-        px, py = bezier_point(controls, t)
-        speed = merge_speed * (start_speed_fraction + (1.0 - start_speed_fraction) * t**2)
-        points.append(LinePoint(px, py, bezier_curvature(controls, t), speed))
-    return tuple(points)
+    def curve_to_line(self, line, line_index, x, y, yaw, merge_distance_m):
+        merge_index = line.index_ahead(line_index, merge_distance_m)
+        if merge_index == line_index:  # the kart is at the end of an open line
+            return None, merge_index
+        merge = line.points[merge_index]
+        gap_m = math.hypot(merge.x_m - x, merge.y_m - y)
+        if gap_m < self.min_gap_m:
+            return None, merge_index
+
+        # The curve leaves the kart along its heading and meets the line along the line's heading
+        handle_m = max(gap_m * self.handle_fraction, self.min_handle_m)
+        merge_heading = line.heading(merge_index)
+        curve = Bezier(
+            (x, y),
+            (x + handle_m * math.cos(yaw), y + handle_m * math.sin(yaw)),
+            (merge.x_m - handle_m * math.cos(merge_heading), merge.y_m - handle_m * math.sin(merge_heading)),
+            (merge.x_m, merge.y_m),
+        )
+        return curve, merge_index
+
+    def too_tight(self, curve):
+        max_curvature = 1.0 / self.min_radius_m
+        return any(abs(curve.curvature(k / self.points)) > max_curvature for k in range(self.points + 1))
+
+    def sample(self, curve, merge_speed_mps):
+        points = []
+        for k in range(self.points + 1):
+            t = k / self.points
+            x, y = curve.point(t)
+            # Slow at the start of the curve, up to the line's speed where it merges
+            speed_fraction = self.start_speed_fraction + (1.0 - self.start_speed_fraction) * t**2
+            points.append(LinePoint(x, y, curve.curvature(t), merge_speed_mps * speed_fraction))
+        return Path(tuple(points))
 
 
-def bezier_controls(start, start_yaw, end, end_yaw, handle_m):
-    # Leaves the kart along its heading and arrives along the line's heading
-    p1 = (start[0] + handle_m * math.cos(start_yaw), start[1] + handle_m * math.sin(start_yaw))
-    p2 = (end[0] - handle_m * math.cos(end_yaw), end[1] - handle_m * math.sin(end_yaw))
-    return start, p1, p2, end
+class Bezier:
+    # Cubic Bezier through four (x, y) control points, with t from 0 at the start to 1 at the end
+    def __init__(self, p0, p1, p2, p3):
+        self.x = (p0[0], p1[0], p2[0], p3[0])
+        self.y = (p0[1], p1[1], p2[1], p3[1])
 
+    def point(self, t):
+        return self.position(self.x, t), self.position(self.y, t)
 
-def bezier_point(controls, t):
-    p0, p1, p2, p3 = controls
-    u = 1.0 - t
-    weights = (u**3, 3 * u**2 * t, 3 * u * t**2, t**3)
-    return (
-        sum(w * p[0] for w, p in zip(weights, controls, strict=True)),
-        sum(w * p[1] for w, p in zip(weights, controls, strict=True)),
-    )
+    def curvature(self, t):
+        dx, dy = self.first_derivative(self.x, t), self.first_derivative(self.y, t)
+        ddx, ddy = self.second_derivative(self.x, t), self.second_derivative(self.y, t)
+        speed_cubed = (dx * dx + dy * dy) ** 1.5
+        if speed_cubed < 1e-9:
+            return 0.0
+        return (dx * ddy - dy * ddx) / speed_cubed
 
+    @staticmethod
+    def position(c, t):
+        u = 1.0 - t
+        return u**3 * c[0] + 3 * u**2 * t * c[1] + 3 * u * t**2 * c[2] + t**3 * c[3]
 
-def bezier_curvature(controls, t):
-    p0, p1, p2, p3 = controls
-    u = 1.0 - t
-    dx = 3 * (u**2 * (p1[0] - p0[0]) + 2 * u * t * (p2[0] - p1[0]) + t**2 * (p3[0] - p2[0]))
-    dy = 3 * (u**2 * (p1[1] - p0[1]) + 2 * u * t * (p2[1] - p1[1]) + t**2 * (p3[1] - p2[1]))
-    ddx = 6 * (u * (p2[0] - 2 * p1[0] + p0[0]) + t * (p3[0] - 2 * p2[0] + p1[0]))
-    ddy = 6 * (u * (p2[1] - 2 * p1[1] + p0[1]) + t * (p3[1] - 2 * p2[1] + p1[1]))
-    speed_cubed = (dx * dx + dy * dy) ** 1.5
-    return 0.0 if speed_cubed < 1e-9 else (dx * ddy - dy * ddx) / speed_cubed
+    @staticmethod
+    def first_derivative(c, t):
+        u = 1.0 - t
+        return 3 * (u**2 * (c[1] - c[0]) + 2 * u * t * (c[2] - c[1]) + t**2 * (c[3] - c[2]))
+
+    @staticmethod
+    def second_derivative(c, t):
+        u = 1.0 - t
+        return 6 * (u * (c[2] - 2 * c[1] + c[0]) + t * (c[3] - 2 * c[2] + c[1]))

@@ -10,7 +10,7 @@ import random
 import pytest
 
 from autonomous_kart.nodes.pathfinder.controllers.base import ControllerInputs, LinePoint
-from autonomous_kart.nodes.pathfinder.controllers.path import heading_at, is_closed
+from autonomous_kart.nodes.pathfinder.controllers.path import Path, is_loop
 from autonomous_kart.nodes.pathfinder.controllers.pure_pursuit import PurePursuitController
 from autonomous_kart.nodes.pathfinder.line import load_line
 
@@ -80,7 +80,7 @@ def drive(line, seconds, params, start=None, seed=0):
     # Rows of (x, y, speed, cte, rejoining) at every tick
     rng = random.Random(seed)
     controller = PurePursuitController(params)
-    x, y, yaw = start or (line[0].x_m, line[0].y_m, heading_at(line, 0))
+    x, y, yaw = start or (line[0].x_m, line[0].y_m, Path(line).heading(0))
     v = steer = 0.0
     poses = [(x, y, yaw, v)] * (LATENCY_TICKS + 1)
     rows = []
@@ -136,7 +136,7 @@ def test_slows_for_corners(params):
 
 def test_rejoins_from_far_off_line(params):
     line = load_line(LINE_CSV)
-    start_yaw = heading_at(line, 0)
+    start_yaw = Path(line).heading(0)
     side = start_yaw + math.pi / 2
     start = (line[0].x_m + 5.0 * math.cos(side), line[0].y_m + 5.0 * math.sin(side), start_yaw)
     rows = drive(line, 15.0, params, start=start)
@@ -167,12 +167,12 @@ def test_stops_at_end_of_open_line(params):
 
 
 def test_short_open_lines_are_not_loops(params):
-    assert not is_closed(straight(length=2), params["closed_gap_m"], params["closed_min_length_m"])
+    assert not is_loop(straight(length=2), params["loop_gap_m"], params["loop_min_length_m"])
     hairpin = tuple(LinePoint(float(i), 0.0, 0.0, 5.0) for i in range(10)) + tuple(
         LinePoint(float(i), 2.0, 0.0, 5.0) for i in reversed(range(10))
     )
-    assert not is_closed(hairpin, params["closed_gap_m"], params["closed_min_length_m"])
-    assert is_closed(oval(), params["closed_gap_m"], params["closed_min_length_m"])
+    assert not is_loop(hairpin, params["loop_gap_m"], params["loop_min_length_m"])
+    assert is_loop(oval(), params["loop_gap_m"], params["loop_min_length_m"])
 
 
 def test_shorter_line_does_not_crash(params):
@@ -187,4 +187,4 @@ def test_picks_the_straight_heading_the_kart_s_way(params):
     line = oval(radius_m=1.5)
     controller = PurePursuitController(params)
     controller.step(inputs_at(20.0, 0.5, math.pi, 3.0, line))
-    assert line[controller.closest].y_m == pytest.approx(1.5)
+    assert line[controller.line_index].y_m == pytest.approx(1.5)
