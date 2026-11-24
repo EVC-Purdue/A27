@@ -2,18 +2,40 @@ pathfinder_node:
   ros__parameters:
     manual_timeout_s: 0.5 # MANUAL commands older than this stop the kart
     controller: "pure_pursuit" # "pure_pursuit", "mpcc", "rl"
-    line_path: "" # racing line CSV; empty publishes a 10 m straight line
-    # Each controller reads its own block, e.g. pure_pursuit.lookahead, mpcc.horizon, rl.alpha_max
+    line_path: "line.csv" # racing line CSV, relative to the package's lines/ folder, or an absolute path
+    # Each controller reads the block named after it
     pure_pursuit:
+      # Steering: aim at a point on the line ahead of the kart
       wheelbase_m: 1.05
-      max_steering_rad: 0.45 # road-wheel angle
-      lookahead_time_s: 0.6 # lookahead distance = speed * this, clamped below
+      max_steering_rad: 0.45              # road-wheel angle limit
+      lookahead_time_s: 0.6               # aim point distance = speed * lookahead_time_s
       min_lookahead_m: 2.0
       max_lookahead_m: 8.0
-      lateral_accel_max_mps2: 6.0 # friction limit for corner speed
-      brake_decel_mps2: 4.0 # how hard the speed profile slows ahead of a corner
+      min_target_m: 0.5                   # an aim point closer than this is ignored and the kart steers straight
+
+      # Speed: as fast as each corner allows, slowing early enough to brake for the next one
       speed_cap_mps: 8.0
-      preview_m: 30.0 # distance ahead the speed profile looks for corners
-      search_window: 50 # points ahead searched for the nearest point each tick
-      resync_m: 5.0 # a nearest point farther than this triggers a full search
-      closed_gap_m: 3.0 # a line whose ends are closer than this wraps around
+      lateral_accel_max_mps2: 6.0         # corner speed limit = sqrt(lateral_accel_max / curvature)
+      brake_decel_mps2: 4.0               # braking the kart is assumed to manage
+
+      # Finding the kart on the line
+      search_window: 50                   # points checked each tick, starting from the last match
+      resync_m: 5.0                       # when the best match is farther than this, search the whole line
+      search_max_heading_error_rad: 1.57  # the whole-line search skips points that head this far off the kart's yaw
+
+      # The line is a loop when its two ends are within loop_gap_m and it is longer than loop_min_length_m
+      loop_gap_m: 3.0
+      loop_min_length_m: 30.0
+
+      # Rejoin: when the kart is far off the line, follow a Bezier curve back onto it
+      rejoin_start_cte_m: 3.0             # distance off the line that starts a rejoin
+      rejoin_stop_cte_m: 1.0              # distance off the line that ends it
+      rejoin_merge_distance_m: 15.0       # the curve meets the line this far ahead of the kart
+      rejoin_min_radius_m: 2.0            # a curve with a tighter turn than this is rebuilt once
+      rejoin_retry_factor: 1.5            # the rebuilt curve merges this many times farther ahead
+      rejoin_handle_fraction: 0.333       # Bezier handle length = this * distance to the merge point
+      rejoin_min_handle_m: 1.0
+      rejoin_min_gap_m: 0.5               # no rejoin when the merge point is closer than this
+      rejoin_points: 50                   # points sampled along the curve
+      rejoin_end_points: 5                # the rejoin ends when this many points of the curve are left
+      rejoin_start_speed_fraction: 0.4    # speed at the start of the curve, as a fraction of the line speed

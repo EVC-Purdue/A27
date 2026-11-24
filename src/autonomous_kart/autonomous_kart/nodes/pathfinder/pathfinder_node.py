@@ -6,7 +6,9 @@ https://github.com/EVC-Purdue/A27/issues/33
 """
 
 import math
+import os
 
+from ament_index_python.packages import get_package_share_directory
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from std_msgs.msg import Bool, Header, String
@@ -64,12 +66,11 @@ class PathfinderNode(Node):
         params = {k: p.value for k, p in self.get_parameters_by_prefix(name).items()}
         self.controller = make_controller(name, params)
         self.get_logger().info(f"controller {name}")
-        line_path = self.get_parameter("line_path").value
-        if line_path:
-            points = load_line(line_path)
-            self.get_logger().info(f"line {line_path}, {len(points)} points")
-        else:
-            points = tuple(base.LinePoint(float(i), 0.0, 0.0, 0.0) for i in range(10))
+        line_path = os.path.join(
+            get_package_share_directory("autonomous_kart"), "lines", self.get_parameter("line_path").value
+        )
+        points = load_line(line_path)
+        self.get_logger().info(f"line {line_path}, {len(points)} points")
         self.line_points = [
             LinePoint(x=p.x_m, y=p.y_m, curvature=p.curvature_radpm, target_speed=p.target_speed_mps) for p in points
         ]
