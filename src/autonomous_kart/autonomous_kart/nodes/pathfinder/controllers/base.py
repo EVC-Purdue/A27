@@ -44,11 +44,23 @@ class ControllerInputs:
 
 
 @dataclass(frozen=True)
+class Plan:
+    points: tuple[LinePoint, ...] = ()  # path the controller is following ahead of the kart
+    cost_terms: tuple[str, ...] = ()  # names of the cost terms, empty for a controller without costs
+    step_costs: tuple[tuple[float, ...], ...] = ()  # one row per step between points, one value per cost term
+    best_cost: float = 0.0  # total cost of the plan
+    cost_field_start_m: float = 0.0  # offset to the side of the line of the first cost_field value
+    cost_field_step_m: float = 0.0  # offset between cost_field values
+    cost_field: tuple[float, ...] = ()  # position cost at each offset
+
+
+@dataclass(frozen=True)
 class ControllerOutput:
     speed_setpoint_mps: float = 0.0
     steering_rad: float = 0.0  # positive left
     electrical_brake: float = 0.0  # 0 to 1
     mechanical_brake: bool = False
+    plan: Plan = Plan()
 
 
 class Controller(ABC):

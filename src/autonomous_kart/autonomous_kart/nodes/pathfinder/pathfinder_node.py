@@ -21,6 +21,7 @@ from kart_interfaces.msg import (
     KartTelemetry,
     Line,
     LinePoint,
+    Plan,
     TrackedObjectArray,
 )
 
@@ -57,6 +58,22 @@ def to_inputs(time_s, odom, telemetry, tracks, line):
     )
 
 
+def to_point_msg(point):
+    return LinePoint(x=point.x_m, y=point.y_m, curvature=point.curvature_radpm, target_speed=point.target_speed_mps)
+
+
+def to_plan_msg(header, plan):
+    msg = Plan(header=header)
+    msg.points = [to_point_msg(p) for p in plan.points]
+    msg.cost_terms = list(plan.cost_terms)
+    msg.step_costs = [cost for step in plan.step_costs for cost in step]
+    msg.best_cost = plan.best_cost
+    msg.cost_field_start = plan.cost_field_start_m
+    msg.cost_field_step = plan.cost_field_step_m
+    msg.cost_field = list(plan.cost_field)
+    return msg
+
+
 class PathfinderNode(Node):
     def __init__(self):
         super().__init__("pathfinder_node", automatically_declare_parameters_from_overrides=True)
@@ -71,9 +88,7 @@ class PathfinderNode(Node):
         )
         points = load_line(line_path)
         self.get_logger().info(f"line {line_path}, {len(points)} points")
-        self.line_points = [
-            LinePoint(x=p.x_m, y=p.y_m, curvature=p.curvature_radpm, target_speed=p.target_speed_mps) for p in points
-        ]
+        self.line_points = [to_point_msg(p) for p in points]
 
         self.system_state = None
         self.odom = None
@@ -89,6 +104,7 @@ class PathfinderNode(Node):
         self.create_subscription(String, "system_state", self.on_state, QOS_STATE)
         self.create_subscription(DriveCommand, "manual/command", self.on_manual, QOS_LOW)
         self.line_pub = self.create_publisher(Line, "pathfinder/line", QOS_HIGH)
+        self.plan_pub = self.create_publisher(Plan, "pathfinder/plan", QOS_HIGH)
         self.cmd_pub = self.create_publisher(DriveCommand, "cmd_drive", QOS_HIGH)
         self.brake_pub = self.create_publisher(Bool, "mechanical_brake/command", QOS_HIGH)
         # Sim lockstep: one Header per tick, frame_id = cmd_drive messages published so far
@@ -135,6 +151,8 @@ class PathfinderNode(Node):
             else:
                 inputs = to_inputs(now.nanoseconds * 1e-9, self.odom, self.telemetry, self.tracks, line)
                 out = self.controller.step(inputs)
+                if out.plan.points:
+                    self.plan_pub.publish(to_plan_msg(line.header, out.plan))
         elif self.system_state == "MANUAL" and self.manual_cmd is not None:
             if (now - self.manual_time).nanoseconds * 1e-9 < self.manual_timeout_s:
                 out = base.ControllerOutput(

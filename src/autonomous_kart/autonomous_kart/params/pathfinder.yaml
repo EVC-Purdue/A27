@@ -12,6 +12,7 @@ pathfinder_node:
       min_lookahead_m: 2.0
       max_lookahead_m: 8.0
       min_target_m: 0.5                   # an aim point closer than this is ignored and the kart steers straight
+      plan_distance_m: 20.0               # length of the path ahead published on pathfinder/plan
 
       # Speed: as fast as each corner allows, slowing early enough to brake for the next one
       speed_cap_mps: 8.0

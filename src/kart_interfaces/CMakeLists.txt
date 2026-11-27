@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TrackedObjectArray.msg"
   "msg/LinePoint.msg"
   "msg/Line.msg"
+  "msg/Plan.msg"
   DEPENDENCIES std_msgs geometry_msgs
 )
 
