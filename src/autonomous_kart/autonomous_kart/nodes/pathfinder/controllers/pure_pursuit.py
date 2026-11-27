@@ -4,11 +4,13 @@ https://github.com/EVC-Purdue/A27/issues/13
 """
 
 import math
+from dataclasses import replace
 
 from autonomous_kart.nodes.pathfinder.controllers.base import (
     Controller,
     ControllerInputs,
     ControllerOutput,
+    Plan,
 )
 from autonomous_kart.nodes.pathfinder.controllers.path import (
     Path,
@@ -32,6 +34,7 @@ class PurePursuitController(Controller):
         self.min_lookahead_m = params["min_lookahead_m"]
         self.max_lookahead_m = params["max_lookahead_m"]
         self.min_target_m = params["min_target_m"]
+        self.plan_distance_m = params["plan_distance_m"]
         # Speed
         self.speed_cap_mps = params["speed_cap_mps"]
         self.lateral_accel_max_mps2 = params["lateral_accel_max_mps2"]
@@ -74,7 +77,13 @@ class PurePursuitController(Controller):
         return ControllerOutput(
             speed_setpoint_mps=path.speeds_mps[index],
             steering_rad=self.steering(path, index, inputs),
+            plan=self.plan(path, index),
         )
+
+    def plan(self, path, index):
+        # The path ahead of the kart, with the speed the kart is driven at each point
+        indices = path.indices_ahead(index, self.plan_distance_m)
+        return Plan(points=tuple(replace(path.points[i], target_speed_mps=path.speeds_mps[i]) for i in indices))
 
     def steering(self, path, index, inputs):
         # Aim at a point ahead on the path, farther ahead at higher speed

@@ -58,6 +58,14 @@ class Path:
             i = j
         return i
 
+    def indices_ahead(self, start, distance_m):
+        # Indices from start to the point distance_m along the path
+        end = self.index_ahead(start, distance_m)
+        indices = [start]
+        while indices[-1] != end:
+            indices.append(self.next(indices[-1]))
+        return indices
+
     def cross_track_error(self, i, x, y):
         # Distance from (x, y) to the path, given that point i is the nearest point
         neighbours = [j for j in (self.previous(i), self.next(i)) if j is not None]

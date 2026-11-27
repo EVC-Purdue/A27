@@ -188,3 +188,19 @@ def test_picks_the_straight_heading_the_kart_s_way(params):
     controller = PurePursuitController(params)
     controller.step(inputs_at(20.0, 0.5, math.pi, 3.0, line))
     assert line[controller.line_index].y_m == pytest.approx(1.5)
+
+
+def test_plan_is_the_line_ahead(params):
+    out = PurePursuitController(params).step(inputs_at(10.0, 0.0, 0.0, 3.0, straight()))
+    xs = [p.x_m for p in out.plan.points]
+    assert xs[0] == 10.0
+    assert xs[-1] == 10.0 + params["plan_distance_m"]
+    assert out.plan.points[0].target_speed_mps == out.speed_setpoint_mps
+
+
+def test_plan_is_the_rejoin_curve_when_off_line(params):
+    controller = PurePursuitController(params)
+    out = controller.step(inputs_at(10.0, 5.0, 0.0, 3.0, straight()))
+    first, last = out.plan.points[0], out.plan.points[-1]
+    assert (first.x_m, first.y_m) == pytest.approx((10.0, 5.0))
+    assert last.y_m == pytest.approx(0.0)
